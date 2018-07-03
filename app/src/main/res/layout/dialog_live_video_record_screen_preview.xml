@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#88000000"
+    android:gravity="center"
+    android:orientation="vertical">
+
+    <RelativeLayout
+        android:layout_width="286dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center">
+
+        <TextureView
+            android:id="@+id/video_view"
+            android:layout_width="match_parent"
+            android:layout_height="286dp" />
+
+        <ImageView
+            android:id="@+id/iv_video_cover"
+            android:layout_width="match_parent"
+            android:layout_height="286dp" />
+
+        <View
+            android:id="@+id/shadow_view_top"
+            android:layout_width="match_parent"
+            android:layout_height="80dp" />
+
+        <View
+            android:id="@+id/shadow_view_bottom"
+            android:layout_width="match_parent"
+            android:layout_height="80dp"
+            android:layout_alignBottom="@id/video_view" />
+
+        <ImageView
+            android:id="@+id/iv_close"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignEnd="@id/video_view"
+            android:src="@drawable/btn_close" />
+    </RelativeLayout>
+
+    <LinearLayout
+        android:layout_width="286dp"
+        android:layout_height="50dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/tv_save_to_local"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="@android:color/white"
+            android:gravity="center"
+            android:text="保存到本地" />
+
+        <View
+            android:layout_width="1dp"
+            android:layout_height="match_parent"
+            android:background="@android:color/darker_gray" />
+
+        <TextView
+            android:id="@+id/tv_release_moments"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:background="@android:color/white"
+            android:gravity="center"
+            android:text="发布动态" />
+    </LinearLayout>
+</LinearLayout>
