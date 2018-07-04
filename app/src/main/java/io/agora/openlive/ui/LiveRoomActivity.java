@@ -32,7 +32,6 @@ import io.agora.openlive.model.ConstantApp;
 import io.agora.openlive.model.VideoStatusData;
 import io.agora.rtc.Constants;
 import io.agora.rtc.RtcEngine;
-import io.agora.rtc.plugin.rawdata.AgoraRawDataSimplePlugin;
 import io.agora.rtc.plugin.rawdata.MediaDataAudioObserver;
 import io.agora.rtc.plugin.rawdata.MediaDataObserverPlugin;
 import io.agora.rtc.plugin.rawdata.MediaPreProcessing;
@@ -269,8 +268,6 @@ public class LiveRoomActivity extends BaseActivity implements AGEventHandler {
         event().removeEventHandler(this);
 
         mUidsList.clear();
-
-        AgoraRawDataSimplePlugin.getInstance().destroy();
     }
 
     private void doLeaveChannel() {

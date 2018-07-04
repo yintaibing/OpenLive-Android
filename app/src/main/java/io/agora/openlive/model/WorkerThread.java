@@ -20,6 +20,7 @@ import java.io.File;
 import io.agora.openlive.R;
 import io.agora.rtc.Constants;
 import io.agora.rtc.RtcEngine;
+import io.agora.rtc.plugin.rawdata.AgoraRawDataSimplePlugin;
 import io.agora.rtc.video.VideoCanvas;
 
 public class WorkerThread extends Thread {
@@ -254,6 +255,8 @@ public class WorkerThread extends Thread {
         Looper.myLooper().quit();
 
         mWorkerHandler.release();
+
+        AgoraRawDataSimplePlugin.getInstance().destroy();
 
         log.debug("exit() > end");
     }
