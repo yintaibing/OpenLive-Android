@@ -168,7 +168,7 @@ public class ScreenStreamCropper extends HandlerThread {
         mTexCoordArray = GlUtil.createFloatBuffer(FULL_RECTANGLE_TEX_COORDS);
 
         Matrix.setIdentityM(mMvpMatrix, 0);
-        Matrix.setIdentityM(mTexMatrix, 0);
+//        Matrix.setIdentityM(mTexMatrix, 0);
     }
 
     private int mProgramHandle;
@@ -180,7 +180,12 @@ public class ScreenStreamCropper extends HandlerThread {
     private FloatBuffer mVertexArray;
 
     private float[] mMvpMatrix = new float[16];
-    private float[] mTexMatrix = new float[16];
+    private float[] mTexMatrix = new float[]{
+            1f, 0f, 0f, 0f,
+            0f, -1f, 0f, 0f,
+            0f, 0f, 1f, 0f,
+            0f, 1f, 0f, 1f
+    };
 
     /**
      * 销毁OpenGL环境
@@ -270,6 +275,10 @@ public class ScreenStreamCropper extends HandlerThread {
             1.0f, 0.0f,     // 1 bottom right
             0.0f, 1.0f,     // 2 top left
             1.0f, 1.0f      // 3 top right
+//            0f, 1f,
+//            1f, 1f,
+//            0f, 0f,
+//            1f, 0f,
     };
 
     // Simple vertex shader, used for all programs.
