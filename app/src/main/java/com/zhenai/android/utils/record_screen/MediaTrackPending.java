@@ -1,33 +1,41 @@
 package com.zhenai.android.utils.record_screen;
 
+import android.annotation.TargetApi;
 import android.media.MediaCodec;
+import android.os.Build;
 import android.util.Log;
 
 import java.util.LinkedList;
 
+@TargetApi(Build.VERSION_CODES.LOLLIPOP)
 public class MediaTrackPending {
-    public MediaCodec mMediaCodec;
-    public int mTrack;
-    public LinkedList<Integer> mPendingBufferIndices = new LinkedList<>();
-    public LinkedList<MediaCodec.BufferInfo> mPendingBufferInfos = new LinkedList<>();
+    MediaStreamProvider mProvider;
+    String mProviderName;
+    int mTrack;
+    LinkedList<Integer> mPendingBufferIndices = new LinkedList<>();
+    LinkedList<MediaCodec.BufferInfo> mPendingBufferInfos = new LinkedList<>();
+
+    public MediaTrackPending(MediaStreamProvider provider) {
+        mProvider = provider;
+        mProviderName = provider.getClass().getSimpleName();
+    }
 
     public void addPending(int outputIndex, MediaCodec.BufferInfo bufferInfo) {
         mPendingBufferIndices.add(outputIndex);
         mPendingBufferInfos.add(bufferInfo);
+        Log.e("MediaTrackPending", mProviderName + " addPending outputIndex=" + outputIndex);
     }
 
-    public void drain(MediaMuxerWrapper muxer) {
-        Log.e("MuxerWrapper", "track " + mTrack + " start drain 1");
-        if (mMediaCodec != null) {
-            int outputIndex;
-            MediaCodec.BufferInfo bufferInfo;
-            Log.e("MuxerWrapper", "track " + mTrack + " start drain 2");
-            while ((bufferInfo = mPendingBufferInfos.poll()) != null) {
-                outputIndex = mPendingBufferIndices.poll();
-                muxer.writeSampleDataJust(mTrack, mMediaCodec.getOutputBuffer(outputIndex), bufferInfo);
-                mMediaCodec.releaseOutputBuffer(outputIndex, false);
-                Log.e("MuxerWrapper", "track " + mTrack + "drain outputIndex="+outputIndex);
-            }
-        }
+    public void setTrack(int track) {
+        mTrack = track;
+    }
+
+    public void clear() {
+        mProvider = null;
+        mProviderName = null;
+        mPendingBufferInfos.clear();
+        mPendingBufferInfos = null;
+        mPendingBufferIndices.clear();
+        mPendingBufferIndices = null;
     }
 }

@@ -60,7 +60,7 @@ public class RecordScreenManager implements RecordScreenLayout.OnOperationListen
     private LiveLongVideoConfig mEditedVideoConfig;
     private float mScaleFactor = 1f;
 
-    private int mMinRecordSec = 5, mMaxRecordSec = 60;
+    private int mMinRecordSec = 1, mMaxRecordSec = 60;
     private int mCurrentRecordedSec;
     private Subscription mCountTimeSubscription;
 
@@ -120,8 +120,8 @@ public class RecordScreenManager implements RecordScreenLayout.OnOperationListen
                 mOriginOutputFile = generateOutputFile(activity);
                 mScreenRecorder = new ScreenRecorder(mOriginOutputFile);
                 mScreenRecorder.addScreenStreamProvider(projection, mOriginVideoConfig);
-                mScreenRecorder.addMediaStreamProvider(new AgoraAudioStreamProvider(
-                        audioEncodeConfig));
+//                mScreenRecorder.addMediaStreamProvider(new AgoraAudioStreamProvider(
+//                        audioEncodeConfig));
                 mScreenRecorder.start();
 
                 // 更新录制栏

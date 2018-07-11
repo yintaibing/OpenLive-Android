@@ -3,7 +3,6 @@ package com.zhenai.android.utils.record_screen;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
-import android.media.MediaCodec;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
@@ -11,7 +10,6 @@ import android.util.Log;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -22,6 +20,7 @@ public class ScreenRecorder {
     private static final int STATE_STOPPED = 2;
 
     private File mOutputFile;
+    private PtsCounter mPtsCounter;
     private MediaMuxerWrapper mMuxerWrapper;
     private ArrayList<MediaStreamProvider> mMediaStreamProviders;
     private AtomicInteger mState = new AtomicInteger(STATE_DEFAULT);
@@ -31,6 +30,7 @@ public class ScreenRecorder {
         if (outputFile == null || !outputFile.exists() || outputFile.isDirectory()) {
             throw new IllegalArgumentException("illegal output file");
         }
+        mPtsCounter = new PtsCounter(0);
         mMediaStreamProviders = new ArrayList<>(1);
     }
 
@@ -75,6 +75,7 @@ public class ScreenRecorder {
 
         for (MediaStreamProvider provider : mMediaStreamProviders) {
             provider.setMuxerWrapper(mMuxerWrapper);
+            provider.setPtsCounter(mPtsCounter);
             provider.prepare();
         }
     }
@@ -98,12 +99,12 @@ public class ScreenRecorder {
     }
 
     private void signalEndOfStream() {
-        MediaCodec.BufferInfo eos = new MediaCodec.BufferInfo();
-        ByteBuffer buffer = ByteBuffer.allocate(0);
-        eos.set(0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
-        for (MediaStreamProvider provider : mMediaStreamProviders) {
-            mMuxerWrapper.writeSampleDataJust(provider.getMuxerTrackIndex(), buffer, eos);
-        }
+//        MediaCodec.BufferInfo eos = new MediaCodec.BufferInfo();
+//        ByteBuffer buffer = ByteBuffer.allocate(0);
+//        eos.set(0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
+//        for (MediaStreamProvider provider : mMediaStreamProviders) {
+//            mMuxerWrapper.writeSampleDataJust(provider.getMuxerTrackIndex(), buffer, eos);
+//        }
     }
 
     private void release() {

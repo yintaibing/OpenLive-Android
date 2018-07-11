@@ -1,32 +1,33 @@
 package com.zhenai.android.utils.record_screen;
 
+import android.annotation.TargetApi;
 import android.media.MediaCodec;
 import android.media.MediaFormat;
 import android.media.MediaMuxer;
+import android.os.Build;
 import android.util.Log;
 import android.util.SparseArray;
 
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.LinkedList;
 
+@TargetApi(Build.VERSION_CODES.LOLLIPOP)
 public class MediaMuxerWrapper {
-    private static final String TAG = "MediaMuxerWrapper";
+    private static final String TAG = MediaMuxerWrapper.class.getSimpleName();
 
     private MediaMuxer mMuxer;
     private final int mRequiredTrackCount;
     private volatile int mAddedTrackCount;
     private volatile boolean mMuxerStarted;
-//    private volatile long mStartWriteTime = 0L;
-    private PtsCounter ptsCounter;
+//    private PtsCounter ptsCounter;
 
-    private SparseArray<MediaTrackPending> mPendings;
+    private SparseArray<MediaTrackPending> mPendings = new SparseArray<>(2);
 
     public MediaMuxerWrapper(File outputFile, int requiredTrackCount) throws IOException {
         mMuxer = new MediaMuxer(outputFile.getPath(), MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
         mRequiredTrackCount = requiredTrackCount;
-        mPendings = new SparseArray<>(2);
-        ptsCounter = new PtsCounter();
     }
 
     public synchronized int addTrack(MediaStreamProvider provider, MediaFormat mediaFormat) {
@@ -34,10 +35,9 @@ public class MediaMuxerWrapper {
         if (track >= 0) {
             mAddedTrackCount++;
 
-            MediaTrackPending pending = mPendings.get(provider.hashCode());
+            MediaTrackPending pending = getTrackPending(provider);
             if (pending != null) {
-                pending.mTrack = track;
-                pending.mMediaCodec = provider.getMediaCodec();
+                pending.setTrack(track);
             }
         }
 
@@ -48,53 +48,71 @@ public class MediaMuxerWrapper {
             mMuxerStarted = true;
             Log.e(TAG, "started muxer");
 
-            int pendingSize = mPendings.size();
-            for (int i = 0; i < pendingSize; i++) {
-                int key = mPendings.keyAt(i);
-                MediaTrackPending pending = mPendings.get(key);
-                pending.drain(this);
-            }
+            flushCache();
         }
 
         return track;
     }
 
-    public void writeSampleData(MediaStreamProvider provider, int outputIndex, MediaCodec.BufferInfo bufferInfo) {
-        if (ptsCounter.isFirstFrame()) {
-            ptsCounter.onFirstFrame();
-            bufferInfo.presentationTimeUs = 0L;
-        } else {
-            bufferInfo.presentationTimeUs = ptsCounter.newPts();
-        }
-
-        int track = provider.getMuxerTrackIndex();
-        if (track >= 0 && mMuxerStarted) {
+    public void writeSampleData(MediaStreamProvider provider,
+                                int outputIndex,
+                                MediaCodec.BufferInfo bufferInfo) {
+        if (mMuxerStarted) {
+            // 所有流都ready了，写文件
             MediaCodec codec = provider.getMediaCodec();
             if (codec != null) {
-                writeSampleDataJust(track, codec.getOutputBuffer(outputIndex), bufferInfo);
+                int track = provider.getMuxerTrackIndex();
+                ByteBuffer byteBuffer = codec.getOutputBuffer(outputIndex);
+                if (track >= 0 && byteBuffer != null) {
+                    byteBuffer.position(bufferInfo.offset)
+                            .limit(bufferInfo.offset + bufferInfo.size);
+                    mMuxer.writeSampleData(track, byteBuffer, bufferInfo);
+                }
                 codec.releaseOutputBuffer(outputIndex, false);
             }
         } else if (mAddedTrackCount > 0) {
-            int key = provider.hashCode();
-            MediaTrackPending pending = mPendings.get(key);
-            if (pending == null) {
-                pending = new MediaTrackPending();
-                pending.mTrack = provider. getMuxerTrackIndex();
-                pending.mMediaCodec = provider.getMediaCodec();
-                mPendings.put(key, pending);
-            }
-            pending.addPending(outputIndex, bufferInfo);
-            Log.e("MuxerWrapper", provider.getClass().getSimpleName() + " addPending outputIndex="+outputIndex);
+            // 有流还未ready，先缓存
+            cache(provider, outputIndex, bufferInfo);
         }
     }
 
-    public void writeSampleDataJust(int track, ByteBuffer byteBuffer,
-                                    MediaCodec.BufferInfo bufferInfo) {
-        if (track >= 0 && byteBuffer != null) {
-            byteBuffer.position(bufferInfo.offset);
-            byteBuffer.limit(bufferInfo.offset + bufferInfo.size);
-            mMuxer.writeSampleData(track, byteBuffer, bufferInfo);
+    private void cache(MediaStreamProvider provider,
+                       int outputIndex,
+                       MediaCodec.BufferInfo bufferInfo) {
+        MediaTrackPending pending = getTrackPending(provider);
+        if (pending == null) {
+            pending = new MediaTrackPending(provider);
+            mPendings.put(provider.hashCode(), pending);
         }
+        pending.addPending(outputIndex, bufferInfo);
+    }
+
+    private void flushCache() {
+        MediaTrackPending pending;
+        LinkedList<Integer> indices;
+        LinkedList<MediaCodec.BufferInfo> infos;
+        MediaCodec.BufferInfo bufferInfo;
+
+        int size = mPendings.size();
+        for (int i = 0; i < size; i++) {
+            pending = mPendings.get(mPendings.keyAt(i));
+            if (pending != null) {
+                indices = pending.mPendingBufferIndices;
+                infos = pending.mPendingBufferInfos;
+
+                while ((bufferInfo = infos.poll()) != null) {
+                    int outputIndex = indices.poll();
+                    writeSampleData(pending.mProvider, outputIndex, bufferInfo);
+                }
+
+                pending.clear();
+            }
+        }
+        mPendings.clear();
+    }
+
+    private MediaTrackPending getTrackPending(MediaStreamProvider provider) {
+        return mPendings.get(provider.hashCode());
     }
 
     public synchronized void stop() {
@@ -107,6 +125,7 @@ public class MediaMuxerWrapper {
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
+                mPendings.clear();
             }
             mMuxer = null;
         }
