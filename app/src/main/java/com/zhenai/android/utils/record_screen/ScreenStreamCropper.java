@@ -216,13 +216,6 @@ public class ScreenStreamCropper extends HandlerThread {
 //        renderInternal();
 //        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
 
-        renderInternal();
-
-        EGLExt.eglPresentationTimeANDROID(eglDisplay, eglSurface, timestamp);
-        EGL14.eglSwapBuffers(eglDisplay, eglSurface);
-    }
-
-    private void renderInternal() {
         GLES20.glUseProgram(mProgramHandle);
 
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
@@ -271,7 +264,11 @@ public class ScreenStreamCropper extends HandlerThread {
 //        GLES20.glDisableVertexAttribArray(maTextureCoordLoc);
 //        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
 //        GLES20.glUseProgram(0);
+
+        EGLExt.eglPresentationTimeANDROID(eglDisplay, eglSurface, timestamp);
+        EGL14.eglSwapBuffers(eglDisplay, eglSurface);
     }
+
 
     private static final float FULL_RECTANGLE_COORDS[] = {
             -1.0f, 1.0f, 0,

@@ -68,6 +68,8 @@ public class MediaMuxerWrapper {
                     byteBuffer.position(bufferInfo.offset)
                             .limit(bufferInfo.offset + bufferInfo.size);
                     bufferInfo.presentationTimeUs=ptsCounter.newPts();
+                    Log.e(TAG, "write: pts="+bufferInfo.presentationTimeUs +
+                            " isVideo="+provider.isVideoStreamProvider());
                     mMuxer.writeSampleData(track, byteBuffer, bufferInfo);
                 }
                 codec.releaseOutputBuffer(outputIndex, false);
@@ -104,6 +106,7 @@ public class MediaMuxerWrapper {
 
                 while ((bufferInfo = infos.poll()) != null) {
                     int outputIndex = indices.poll();
+                    Log.e(TAG, "flushCache: isVideo="+pending.mProvider.isVideoStreamProvider());
                     writeSampleData(pending.mProvider, outputIndex, bufferInfo);
                 }
 

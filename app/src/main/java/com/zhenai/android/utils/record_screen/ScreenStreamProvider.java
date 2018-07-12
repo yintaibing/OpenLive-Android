@@ -24,8 +24,6 @@ public class ScreenStreamProvider extends MediaStreamProvider {
 
     private ImageReader mImageReader;
     private ScreenStreamCropper mCropper;
-//    private byte[] mTempBytes;
-    private ByteBuffer mTempBuffer;
 
     public ScreenStreamProvider(@NonNull MediaProjection mediaProjection,
                                 @NonNull VideoEncodeConfig config) {
@@ -36,15 +34,16 @@ public class ScreenStreamProvider extends MediaStreamProvider {
         mCropper.initHandler();
     }
 
-    @Override
-    public void prepare() {
-        mCropper.mHandler.post(new Runnable() {
-            @Override
-            public void run() {
-                ScreenStreamProvider.super.prepare();
-            }
-        });
-    }
+//    @Override
+//    public void prepare() {
+//        mCropper.mHandler.post(new Runnable() {
+//            @Override
+//            public void run() {
+//                Log.e("ScreenStreamProvider", "prepare thread="+Thread.currentThread().getName());
+//                ScreenStreamProvider.super.prepare();
+//            }
+//        });
+//    }
 
     @Override
     public boolean isVideoStreamProvider() {
@@ -65,7 +64,7 @@ public class ScreenStreamProvider extends MediaStreamProvider {
 
             @Override
             public void onOutputBufferAvailable(@NonNull MediaCodec codec, int index, @NonNull MediaCodec.BufferInfo info) {
-                mux(index, codec.getOutputBuffer(index), info);
+                mux(index, info);
             }
 
             @Override
@@ -100,22 +99,10 @@ public class ScreenStreamProvider extends MediaStreamProvider {
             public void onImageAvailable(ImageReader reader) {
                 Image image = reader.acquireNextImage();
                 Image.Plane[] planes = image.getPlanes();
-                for (Image.Plane p : planes) {
-                    ByteBuffer byteBuffer = p.getBuffer();
-
-//                    if (mTempBuffer == null) {
-////                        mTempBytes = new byte[byteBuffer.limit()];
-//                        mTempBuffer = ByteBuffer.allocateDirect(byteBuffer.limit());
-//                    }
-//                    mTempBuffer.clear();
-////                    mTempBuffer.reset();
-//                    mTempBuffer.put(byteBuffer);
-////                    mTempBuffer.position(byteBuffer.position())
-////                            .limit(byteBuffer.limit());
-
-                    mCropper.signalRender(byteBuffer, newPts());
-
-//                    mTempBuffer.clear();
+                if (planes != null && planes.length > 0) {
+                    ByteBuffer byteBuffer = planes[0].getBuffer();
+                    long pts = newPts();
+                    mCropper.signalRender(byteBuffer, pts);
                 }
 
                 image.close();

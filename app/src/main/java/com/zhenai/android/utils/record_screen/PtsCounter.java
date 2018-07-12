@@ -16,6 +16,7 @@ public class PtsCounter {
         if (mFirstNano == 0L) {
             mFirstNano = nowNano;
             result = 0L;
+            return mPrevNano = result;
         } else {
             result = nowNano - mFirstNano;
         }

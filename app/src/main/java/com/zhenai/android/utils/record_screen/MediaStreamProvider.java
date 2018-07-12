@@ -48,7 +48,7 @@ public abstract class MediaStreamProvider {
         mMediaCodec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
         onCodecConfigured(mMediaCodec);
         mMediaCodec.start();
-        Log.e(TAG, "started media codec: " + mConfig.codecName);
+        Log.e(TAG, "started media codec: " + mMediaCodec.getName());
         onCodecStarted(mMediaCodec);
     }
 
@@ -77,7 +77,7 @@ public abstract class MediaStreamProvider {
         return mMuxerTrackIndex;
     }
 
-    public void mux(int outputIndex, ByteBuffer byteBuffer, MediaCodec.BufferInfo bufferInfo) {
+    public void mux(int outputIndex, MediaCodec.BufferInfo bufferInfo) {
         MediaMuxerWrapper muxer = mMuxerWrapper;
         MediaCodec codec = mMediaCodec;
         if (codec == null || muxer == null) {
@@ -87,7 +87,15 @@ public abstract class MediaStreamProvider {
         if (outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
             addMuxerTrack(codec.getOutputFormat());
         } else if (outputIndex >= 0 && bufferInfo != null) {
-            muxer.writeSampleData(this, outputIndex, bufferInfo);
+            if (!ScreenRecorderUtils.hasCodecConfigFlag(bufferInfo)) {
+                // BUFFER_FLAG_CODEC_CONFIG,已手动configure了codec，不再需要此buffer，
+                // 否则可能导致chrome无法播放
+                Log.e(TAG, "video: pts="+bufferInfo.presentationTimeUs);
+                muxer.writeSampleData(this, outputIndex, bufferInfo);
+            } else {
+                // 未被处理的buffer，直接释放掉
+                codec.releaseOutputBuffer(outputIndex, false);
+            }
 
             if (ScreenRecorderUtils.hasEosFlag(bufferInfo)) {
                 mQuit.set(true);
@@ -150,6 +158,7 @@ public abstract class MediaStreamProvider {
                 inputBuffer.put(byteBuffer, 0, length);
 
                 long pts = newPts();
+                Log.e(TAG, "audio: pts="+pts);
                 codec.queueInputBuffer(inputIndex, 0, length, pts,
                         mQuit.get() || length <= 0 ? MediaCodec.BUFFER_FLAG_END_OF_STREAM : 0);
             }

@@ -45,7 +45,7 @@ public class RecordScreenManager implements RecordScreenLayout.OnOperationListen
     private static final int REQUEST_CODE_RECORD_SCREEN = 81;
     public static final int REQUEST_CODE_PUBLISH_LONG_VIDEO = 82;
 
-    private final int RESOLUTION = 480;//VideoParam.VIDEO_RESOLUTION_540P;
+    private final int RESOLUTION = 576;//VideoParam.VIDEO_RESOLUTION_540P;
 
     private RecordScreenLayout mRecordLayout;
     private ProgressDialog mProgressDialog;
@@ -120,8 +120,8 @@ public class RecordScreenManager implements RecordScreenLayout.OnOperationListen
                 mOriginOutputFile = generateOutputFile(activity);
                 mScreenRecorder = new ScreenRecorder(mOriginOutputFile);
                 mScreenRecorder.addScreenStreamProvider(projection, mOriginVideoConfig);
-//                mScreenRecorder.addMediaStreamProvider(new AgoraAudioStreamProvider(
-//                        audioEncodeConfig));
+                mScreenRecorder.addMediaStreamProvider(new AgoraAudioStreamProvider(
+                        audioEncodeConfig));
                 mScreenRecorder.start();
 
                 // 更新录制栏
