@@ -78,25 +78,27 @@ public class ScreenStreamCropper extends HandlerThread {
     }
 
     public void signalRender(Buffer readBuffer, long timestamp) {
-        if (!mReadBufferSet) {
+//        if (!mReadBufferSet) {
             int[] textures = new int[1];
             GLES20.glGenTextures(1, textures, 0);
             mTextureID = textures[0];
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mTextureID);
             GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR);
             GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
+            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
             GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, w, h, 0, GLES20.GL_RGBA,
                     GLES20.GL_UNSIGNED_BYTE, readBuffer);
             GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
 
 
-            int[] frameBuffers = new int[1];
-            GLES20.glGenFramebuffers(1, frameBuffers, 0);
-            mFrameBuffer = frameBuffers[0];
+//            int[] frameBuffers = new int[1];
+//            GLES20.glGenFramebuffers(1, frameBuffers, 0);
+//            mFrameBuffer = frameBuffers[0];
 
 
-            mReadBufferSet = true;
-        }
+//            mReadBufferSet = true;
+//        }
         render(timestamp);
     }
 
@@ -168,6 +170,7 @@ public class ScreenStreamCropper extends HandlerThread {
         mTexCoordArray = GlUtil.createFloatBuffer(FULL_RECTANGLE_TEX_COORDS);
 
         Matrix.setIdentityM(mMvpMatrix, 0);
+//        Matrix.translateM(mMvpMatrix, 0, 0.5f, 0f, 0f);
 //        Matrix.setIdentityM(mTexMatrix, 0);
     }
 
@@ -180,11 +183,17 @@ public class ScreenStreamCropper extends HandlerThread {
     private FloatBuffer mVertexArray;
 
     private float[] mMvpMatrix = new float[16];
-    private float[] mTexMatrix = new float[]{
+    private float[] mTexMatrix = new float[]
+            {
             1f, 0f, 0f, 0f,
             0f, -1f, 0f, 0f,
             0f, 0f, 1f, 0f,
             0f, 1f, 0f, 1f
+
+//            0f, -1f, 0f, 0f,
+//            1f, 0f, 0f, 0f,
+//            0f, 0f, 1f, 0f,
+//            0f, 1f, 0f, 1f
     };
 
     /**
@@ -233,10 +242,10 @@ public class ScreenStreamCropper extends HandlerThread {
 
         // Connect vertexBuffer to "aPosition".
         GLES20.glVertexAttribPointer(maPositionLoc,
-                2,//Drawable2d.COORDS_PER_VERTEX,
+                3,//Drawable2d.COORDS_PER_VERTEX,
                 GLES20.GL_FLOAT,
                 false,
-                8,//Drawable2d.VERTEXTURE_STRIDE,
+                3*4,//Drawable2d.VERTEXTURE_STRIDE,
                 mVertexArray);
         GlUtil.checkGlError("glVertexAttribPointer");
 
@@ -249,56 +258,64 @@ public class ScreenStreamCropper extends HandlerThread {
                 2,
                 GLES20.GL_FLOAT,
                 false,
-                8,//Drawable2d.TEXTURE_COORD_STRIDE,
+                2*4,//Drawable2d.TEXTURE_COORD_STRIDE,
                 mTexCoordArray);
         GlUtil.checkGlError("glVertexAttribPointer");
 
-        GLES20.glViewport(x, y, w, h);
-        GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 4);
+        GLES20.glViewport(x, -100, w, h);
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 6);
 //        GLES20.glClearColor(50f, 100f, 150f, 1f);
 //        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
 
-        GLES20.glDisableVertexAttribArray(maPositionLoc);
-        GLES20.glDisableVertexAttribArray(maTextureCoordLoc);
-        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
-        GLES20.glUseProgram(0);
+//        GLES20.glDisableVertexAttribArray(maPositionLoc);
+//        GLES20.glDisableVertexAttribArray(maTextureCoordLoc);
+//        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
+//        GLES20.glUseProgram(0);
     }
 
     private static final float FULL_RECTANGLE_COORDS[] = {
-            -1.0f, -1.0f,   // 0 bottom left
-            1.0f, -1.0f,   // 1 bottom right
-            -1.0f, 1.0f,   // 2 top left
-            1.0f, 1.0f,   // 3 top right
+            -1.0f, 1.0f, 0,
+            -1.0f, -1.0f, 0,
+            1.0f, 1.0f, 0,
+
+            -1.0f, -1.0f, 0,
+            1.0f, -1.0f, 0,
+            1.0f, 1.0f, 0
     };
     private static final float FULL_RECTANGLE_TEX_COORDS[] = {
-            0.0f, 0.0f,     // 0 bottom left
-            1.0f, 0.0f,     // 1 bottom right
-            0.0f, 1.0f,     // 2 top left
-            1.0f, 1.0f      // 3 top right
-//            0f, 1f,
-//            1f, 1f,
-//            0f, 0f,
-//            1f, 0f,
+//            0, 0,
+//            0, 1,
+//            1, 0,
+//            0, 1,
+//            1, 1,
+//            1, 0
+            0f, 1f,
+            0f, 0f,
+            1f, 1f,
+            0f, 0f,
+            1f, 0f,
+            1f, 1f
     };
 
     // Simple vertex shader, used for all programs.
     private static final String VERTEX_SHADER =
-            "uniform mat4 uMVPMatrix;\n" +
-                    "uniform mat4 uTexMatrix;\n" +
-                    "attribute vec4 aPosition;\n" +
-                    "attribute vec4 aTextureCoord;\n" +
-                    "varying vec2 vTextureCoord;\n" +
-                    "void main() {\n" +
-                    "    gl_Position = uMVPMatrix * aPosition;\n" +
-                    "    vTextureCoord = (uTexMatrix * aTextureCoord).xy;\n" +
-                    "}\n";
+            "uniform mat4 uMVPMatrix;\n"
+                    + "uniform mat4 uTexMatrix;\n"
+                    + "attribute highp vec3 aPosition;\n"
+                    + "attribute highp vec2 aTextureCoord;\n"
+                    + "varying highp vec2 vTextureCoord;\n"
+                    + "\n"
+                    + "void main() {\n"
+                    + "	gl_Position = uMVPMatrix * vec4(aPosition,1);\n"
+                    + "	vTextureCoord = (uTexMatrix * vec4(aTextureCoord,1,1)).xy;\n"
+                    + "}\n";
 
     // Simple fragment shader for use with "normal" 2D textures.
     private static final String FRAGMENT_SHADER_2D =
-            "precision mediump float;\n" +
-                    "varying vec2 vTextureCoord;\n" +
-                    "uniform sampler2D sTexture;\n" +
-                    "void main() {\n" +
-                    "    gl_FragColor = vec4(texture2D(sTexture, vTextureCoord).rgb, 1.0);\n" +
-                    "}\n";
+            "precision mediump float;\n"
+                    + "uniform sampler2D sTexture;\n"
+                    + "varying highp vec2 vTextureCoord;\n"
+                    + "void main() {\n"
+                    + "  gl_FragColor = texture2D(sTexture, vTextureCoord);\n"
+                    + "}";
 }

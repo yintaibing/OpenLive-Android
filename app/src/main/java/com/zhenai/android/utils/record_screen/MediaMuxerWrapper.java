@@ -21,13 +21,14 @@ public class MediaMuxerWrapper {
     private final int mRequiredTrackCount;
     private volatile int mAddedTrackCount;
     private volatile boolean mMuxerStarted;
-//    private PtsCounter ptsCounter;
+    private PtsCounter ptsCounter;
 
     private SparseArray<MediaTrackPending> mPendings = new SparseArray<>(2);
 
     public MediaMuxerWrapper(File outputFile, int requiredTrackCount) throws IOException {
         mMuxer = new MediaMuxer(outputFile.getPath(), MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
         mRequiredTrackCount = requiredTrackCount;
+        ptsCounter = new PtsCounter(0);
     }
 
     public synchronized int addTrack(MediaStreamProvider provider, MediaFormat mediaFormat) {
@@ -66,6 +67,7 @@ public class MediaMuxerWrapper {
                 if (track >= 0 && byteBuffer != null) {
                     byteBuffer.position(bufferInfo.offset)
                             .limit(bufferInfo.offset + bufferInfo.size);
+                    bufferInfo.presentationTimeUs=ptsCounter.newPts();
                     mMuxer.writeSampleData(track, byteBuffer, bufferInfo);
                 }
                 codec.releaseOutputBuffer(outputIndex, false);

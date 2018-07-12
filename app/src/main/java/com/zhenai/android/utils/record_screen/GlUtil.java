@@ -65,20 +65,18 @@ public abstract class GlUtil {
 
         int program = GLES20.glCreateProgram();
         checkGlError("glCreateProgram");
-        if (program == 0) {
-
-        }
-        GLES20.glAttachShader(program, vertexShader);
-        checkGlError("glAttachShader");
-        GLES20.glAttachShader(program, pixelShader);
-        checkGlError("glAttachShader");
-        GLES20.glLinkProgram(program);
-        int[] linkStatus = new int[1];
-        GLES20.glGetProgramiv(program, GLES20.GL_LINK_STATUS, linkStatus, 0);
-        if (linkStatus[0] != GLES20.GL_TRUE) {
-
-            GLES20.glDeleteProgram(program);
-            program = 0;
+        if (program != 0) {
+            GLES20.glAttachShader(program, vertexShader);
+            checkGlError("glAttachShader");
+            GLES20.glAttachShader(program, pixelShader);
+            checkGlError("glAttachShader");
+            GLES20.glLinkProgram(program);
+            int[] linkStatus = new int[1];
+            GLES20.glGetProgramiv(program, GLES20.GL_LINK_STATUS, linkStatus, 0);
+            if (linkStatus[0] != GLES20.GL_TRUE) {
+                GLES20.glDeleteProgram(program);
+                program = 0;
+            }
         }
         return program;
     }

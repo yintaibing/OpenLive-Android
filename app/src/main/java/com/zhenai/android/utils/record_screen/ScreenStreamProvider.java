@@ -103,15 +103,19 @@ public class ScreenStreamProvider extends MediaStreamProvider {
                 for (Image.Plane p : planes) {
                     ByteBuffer byteBuffer = p.getBuffer();
 
-                    if (mTempBuffer == null) {
-//                        mTempBytes = new byte[byteBuffer.limit()];
-                        mTempBuffer = ByteBuffer.allocateDirect(byteBuffer.limit());
-                    }
-                    mTempBuffer.put(byteBuffer);
+//                    if (mTempBuffer == null) {
+////                        mTempBytes = new byte[byteBuffer.limit()];
+//                        mTempBuffer = ByteBuffer.allocateDirect(byteBuffer.limit());
+//                    }
+//                    mTempBuffer.clear();
+////                    mTempBuffer.reset();
+//                    mTempBuffer.put(byteBuffer);
+////                    mTempBuffer.position(byteBuffer.position())
+////                            .limit(byteBuffer.limit());
 
-                    mCropper.signalRender(mTempBuffer, newPts());
+                    mCropper.signalRender(byteBuffer, newPts());
 
-                    mTempBuffer.clear();
+//                    mTempBuffer.clear();
                 }
 
                 image.close();

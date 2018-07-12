@@ -13,14 +13,11 @@ public class PtsCounter {
         long nowNano = System.nanoTime();
         long result;
 
-        if (mStartNano == 0L) {
-            result = nowNano;
+        if (mFirstNano == 0L) {
+            mFirstNano = nowNano;
+            result = 0L;
         } else {
-            if (mFirstNano == 0L) {
-                mFirstNano = nowNano;
-            }
-            long elapsedNano = nowNano - mFirstNano;
-            result = mStartNano + elapsedNano;
+            result = nowNano - mFirstNano;
         }
 
         result /= 1000L;
@@ -28,7 +25,7 @@ public class PtsCounter {
         if (result < mPrevNano) {
             result = (mPrevNano - result) + result;
         }
-        if (result == mPrevNano) {
+        if (mPrevNano > 0L && result == mPrevNano) {
             result += 100L;
         }
 
