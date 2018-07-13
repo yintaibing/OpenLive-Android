@@ -6,106 +6,66 @@ import android.opengl.EGLContext;
 import android.opengl.EGLDisplay;
 import android.opengl.EGLExt;
 import android.opengl.EGLSurface;
+import android.opengl.GLES11Ext;
 import android.opengl.GLES20;
 import android.opengl.Matrix;
 import android.os.Handler;
-import android.os.HandlerThread;
-import android.os.Message;
 import android.view.Surface;
 
-import java.nio.Buffer;
 import java.nio.FloatBuffer;
 
-public class ScreenStreamCropper extends HandlerThread {
-    public static final int MSG_START = 1,
-                            MSG_RENDER = 2,
-                            MSG_STOP = 3;
-
+public class ScreenStreamCropper {
     private static final int EGL_RECORDABLE_ANDROID = 0x3142;
+    private static final int GL_TEXTURE_TARGET = GLES11Ext.GL_TEXTURE_EXTERNAL_OES;
+//    private static final int GL_TEXTURE_TARGET = GLES20.GL_TEXTURE_2D;
 
     public Handler mHandler;
 
     // gl
     private EGLDisplay eglDisplay;
-    private EGLConfig eglConfig;
-    private EGLContext eglContext;
-    private EGLSurface eglSurface;
+
+    private EGLContext eglPbufferContext;
+    private EGLSurface eglPbufferSurface;
+
+    private EGLContext eglWindowContext;
+    private EGLSurface eglWindowSurface;
     private int mTextureID;
-    private int mFrameBuffer;
 
     // config
     public int x, y, w, h;
     public Surface mOutputSurface;
-    public boolean mReadBufferSet;
-    public byte[] mReadBuffer;
-
 
     public ScreenStreamCropper() {
-        super("ScreenStreamCropper");
+
     }
 
-    public void initHandler() {
-        mHandler = new Handler(getLooper()) {
-            @Override
-            public void handleMessage(Message msg) {
-                switch (msg.what) {
-                    case MSG_START:
-                        createGL();
-                        break;
-
-//                    case MSG_RENDER:
-//                        render();
-//                        break;
-
-                    case MSG_STOP:
-                        destroyGL();
-                        break;
-                }
-            }
-        };
+    public void createTexture() {
+        int[] textures = new int[1];
+        GLES20.glGenTextures(1, textures, 0);
+        mTextureID = textures[0];
+        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
+        GLES20.glBindTexture(GL_TEXTURE_TARGET, mTextureID);
+        GLES20.glTexParameteri(GL_TEXTURE_TARGET, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR);
+        GLES20.glTexParameteri(GL_TEXTURE_TARGET, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
+        GLES20.glTexParameteri(GL_TEXTURE_TARGET, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
+        GLES20.glTexParameteri(GL_TEXTURE_TARGET, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
+//        GLES20.glTexImage2D(GL_TEXTURE_TARGET, 0, GLES20.GL_RGBA, w, h, 0, GLES20.GL_RGBA,
+//                GLES20.GL_UNSIGNED_BYTE, null);
+//        GLES20.glBindTexture(GL_TEXTURE_TARGET, 0);
     }
 
-    private void sendMsg(int what) {
-        mHandler.obtainMessage(what).sendToTarget();
+    public void setmOutputSurface(Surface mOutputSurface) {
+        this.mOutputSurface = mOutputSurface;
     }
 
-    public void signalPrepare() {
-        sendMsg(MSG_START);
-    }
-
-    public void signalStop() {
-        sendMsg(MSG_STOP);
-    }
-
-    public void signalRender(Buffer readBuffer, long timestamp) {
-//        if (!mReadBufferSet) {
-            int[] textures = new int[1];
-            GLES20.glGenTextures(1, textures, 0);
-            mTextureID = textures[0];
-            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mTextureID);
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_LINEAR);
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_LINEAR);
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_S, GLES20.GL_CLAMP_TO_EDGE);
-            GLES20.glTexParameteri(GLES20.GL_TEXTURE_2D, GLES20.GL_TEXTURE_WRAP_T, GLES20.GL_CLAMP_TO_EDGE);
-            GLES20.glTexImage2D(GLES20.GL_TEXTURE_2D, 0, GLES20.GL_RGBA, w, h, 0, GLES20.GL_RGBA,
-                    GLES20.GL_UNSIGNED_BYTE, readBuffer);
-            GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
-
-
-//            int[] frameBuffers = new int[1];
-//            GLES20.glGenFramebuffers(1, frameBuffers, 0);
-//            mFrameBuffer = frameBuffers[0];
-
-
-//            mReadBufferSet = true;
-//        }
-        render(timestamp);
+    public int getmTextureID() {
+        return mTextureID;
     }
 
     /**
      * 创建OpenGL环境
      */
-    private void createGL() {
+    public void createGL() {
         // 获取显示设备(默认的显示设备)
         eglDisplay = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY);
         // 初始化
@@ -113,47 +73,19 @@ public class ScreenStreamCropper extends HandlerThread {
         if (!EGL14.eglInitialize(eglDisplay, version, 0, version, 1)) {
             throw new RuntimeException("EGL error " + EGL14.eglGetError());
         }
-        // 获取FrameBuffer格式和能力
-        int[] configAttribs = {
-                EGL14.EGL_BUFFER_SIZE, 32,
 
-                EGL14.EGL_ALPHA_SIZE, 8,
-                EGL14.EGL_BLUE_SIZE, 8,
-                EGL14.EGL_GREEN_SIZE, 8,
-                EGL14.EGL_RED_SIZE, 8,
+        // pbuffer surface start
+        createPBufferSurface();
+        GlUtil.checkGlError("createPBufferSurface");
+        // pbuffer surface end
 
-                EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT,
-                EGL_RECORDABLE_ANDROID,
-                1,
-                EGL14.EGL_NONE
-        };
-        int[] numConfigs = new int[1];
-        EGLConfig[] configs = new EGLConfig[1];
-        if (!EGL14.eglChooseConfig(eglDisplay, configAttribs, 0, configs, 0, configs.length, numConfigs, 0)) {
-            throw new RuntimeException("EGL error " + EGL14.eglGetError());
-        }
-        eglConfig = configs[0];
-        // 创建OpenGL上下文(可以先不设置EGLSurface，但EGLContext必须创建，
-        // 因为后面调用GLES方法基本都要依赖于EGLContext)
-        int[] contextAttribs = {
-                EGL14.EGL_CONTEXT_CLIENT_VERSION, 2,
-                EGL14.EGL_NONE
-        };
-        eglContext = EGL14.eglCreateContext(eglDisplay, eglConfig, EGL14.EGL_NO_CONTEXT, contextAttribs, 0);
-        if (eglContext == EGL14.EGL_NO_CONTEXT) {
-            throw new RuntimeException("EGL error " + EGL14.eglGetError());
-        }
 
-        int[] attrs_list = new int[] {
-                EGL14.EGL_NONE
-        };
-        eglSurface = EGL14.eglCreateWindowSurface(eglDisplay, eglConfig, mOutputSurface, attrs_list, 0);
+        // window surface start
+        createWindowSurface();
+        GlUtil.checkGlError("createWindowSurface");
+        // window surface end
 
-        // 设置默认的上下文环境和输出缓冲区(小米4上如果不设置有效的eglSurface后面创建着色器会失败，可以先创建一个默认的eglSurface)
-        //EGL14.eglMakeCurrent(eglDisplay, surface.eglSurface, surface.eglSurface, eglContext);
-//        EGL14.eglMakeCurrent(eglDisplay, EGL14.EGL_NO_SURFACE, EGL14.EGL_NO_SURFACE, eglContext);
-        EGL14.eglMakeCurrent(eglDisplay, eglSurface, eglSurface, eglContext);
-
+        makeCurrent(false);
 
         mProgramHandle = GlUtil.createProgram(VERTEX_SHADER, FRAGMENT_SHADER_2D);
 
@@ -169,9 +101,92 @@ public class ScreenStreamCropper extends HandlerThread {
         mVertexArray = GlUtil.createFloatBuffer(FULL_RECTANGLE_COORDS);
         mTexCoordArray = GlUtil.createFloatBuffer(FULL_RECTANGLE_TEX_COORDS);
 
+        // create texture
+        createTexture();
+
         Matrix.setIdentityM(mMvpMatrix, 0);
 //        Matrix.translateM(mMvpMatrix, 0, 0.5f, 0f, 0f);
-//        Matrix.setIdentityM(mTexMatrix, 0);
+        Matrix.setIdentityM(mTexMatrix, 0);
+    }
+
+    private void createPBufferSurface() {
+        int[] pbufferConfigAttribs = {
+                EGL14.EGL_BUFFER_SIZE, 32,
+
+                EGL14.EGL_ALPHA_SIZE, 8,
+                EGL14.EGL_BLUE_SIZE, 8,
+                EGL14.EGL_GREEN_SIZE, 8,
+                EGL14.EGL_RED_SIZE, 8,
+
+                EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT,
+                EGL14.EGL_SURFACE_TYPE, EGL14.EGL_PBUFFER_BIT,
+
+                EGL14.EGL_NONE
+        };
+        int[] numConfigs = new int[1];
+        EGLConfig[] configs = new EGLConfig[1];
+        if (!EGL14.eglChooseConfig(eglDisplay, pbufferConfigAttribs, 0, configs, 0, configs.length, numConfigs, 0)) {
+            throw new RuntimeException("EGL error " + EGL14.eglGetError());
+        }
+        EGLConfig eglConfig = configs[0];
+        int[] contextAttribs = {
+                EGL14.EGL_CONTEXT_CLIENT_VERSION, 2,
+                EGL14.EGL_NONE
+        };
+        eglPbufferContext = EGL14.eglCreateContext(eglDisplay, eglConfig, EGL14.EGL_NO_CONTEXT, contextAttribs, 0);
+        if (eglPbufferContext == EGL14.EGL_NO_CONTEXT) {
+            throw new RuntimeException("EGL error " + EGL14.eglGetError());
+        }
+        int[] pbufferSurfaceAttribs = new int[] {
+                EGL14.EGL_WIDTH, w,
+                EGL14.EGL_HEIGHT, h,
+
+                EGL14.EGL_NONE
+        };
+        eglPbufferSurface = EGL14.eglCreatePbufferSurface(eglDisplay, eglConfig, pbufferSurfaceAttribs, 0);
+    }
+
+    private void createWindowSurface() {
+        int[] windowConfigAttribs = {
+                EGL14.EGL_BUFFER_SIZE, 32,
+
+                EGL14.EGL_ALPHA_SIZE, 8,
+                EGL14.EGL_BLUE_SIZE, 8,
+                EGL14.EGL_GREEN_SIZE, 8,
+                EGL14.EGL_RED_SIZE, 8,
+
+                EGL14.EGL_RENDERABLE_TYPE, EGL14.EGL_OPENGL_ES2_BIT,
+//                EGL_RECORDABLE_ANDROID, 1,
+                EGL14.EGL_NONE, 0,
+
+                EGL14.EGL_NONE
+        };
+        int[] numConfigs = new int[1];
+        EGLConfig[] configs = new EGLConfig[1];
+        if (!EGL14.eglChooseConfig(eglDisplay, windowConfigAttribs, 0, configs, 0, configs.length, numConfigs, 0)) {
+            throw new RuntimeException("EGL error " + EGL14.eglGetError());
+        }
+        EGLConfig eglConfig = configs[0];
+        int[] contextAttribs = {
+                EGL14.EGL_CONTEXT_CLIENT_VERSION, 2,
+                EGL14.EGL_NONE
+        };
+        eglWindowContext = EGL14.eglCreateContext(eglDisplay, eglConfig, EGL14.EGL_NO_CONTEXT, contextAttribs, 0);
+        if (eglWindowContext == EGL14.EGL_NO_CONTEXT) {
+            throw new RuntimeException("EGL error " + EGL14.eglGetError());
+        }
+        int[] windowSurfaceAttribs = new int[] {
+                EGL14.EGL_NONE
+        };
+        eglWindowSurface = EGL14.eglCreateWindowSurface(eglDisplay, eglConfig, mOutputSurface, windowSurfaceAttribs, 0);
+    }
+
+    public void makeCurrent(boolean window) {
+        if (window) {
+            EGL14.eglMakeCurrent(eglDisplay, eglWindowSurface, eglWindowSurface, eglWindowContext);
+        } else {
+            EGL14.eglMakeCurrent(eglDisplay, eglPbufferSurface, eglPbufferSurface, eglPbufferContext);
+        }
     }
 
     private int mProgramHandle;
@@ -189,45 +204,33 @@ public class ScreenStreamCropper extends HandlerThread {
             0f, -1f, 0f, 0f,
             0f, 0f, 1f, 0f,
             0f, 1f, 0f, 1f
-
-//            0f, -1f, 0f, 0f,
-//            1f, 0f, 0f, 0f,
-//            0f, 0f, 1f, 0f,
-//            0f, 1f, 0f, 1f
     };
 
     /**
      * 销毁OpenGL环境
      */
-    private void destroyGL() {
-        EGL14.eglDestroyContext(eglDisplay, eglContext);
-        eglContext = EGL14.EGL_NO_CONTEXT;
+    public void destroyGL() {
+        EGL14.eglDestroyContext(eglDisplay, eglPbufferContext);
+        eglPbufferContext = EGL14.EGL_NO_CONTEXT;
+        EGL14.eglDestroyContext(eglDisplay, eglWindowContext);
+        eglWindowContext = EGL14.EGL_NO_CONTEXT;
         eglDisplay = EGL14.EGL_NO_DISPLAY;
     }
 
     /**
      * 渲染到各个eglSurface
      */
-    private void render(long timestamp) {
+    public void render(long timestamp) {
 //        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, mFrameBuffer);
 //        GLES20.glFramebufferTexture2D(GLES20.GL_FRAMEBUFFER,
 //                GLES20.GL_COLOR_ATTACHMENT0,
-//                GLES20.GL_TEXTURE_2D, mTextureID, 0);
-//        renderInternal();
+//                GL_TEXTURE_TARGET, mTextureID, 0);
 //        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
 
         GLES20.glUseProgram(mProgramHandle);
+        GlUtil.checkGlError("glUseProgram");
 
-        GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
-        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, mTextureID);
-
-        // Copy the model / view / projection matrix over.
-        GLES20.glUniformMatrix4fv(muMVPMatrixLoc, 1, false, mMvpMatrix, 0);
-        GlUtil.checkGlError("glUniformMatrix4fv");
-//
-//        // Copy the texture transformation matrix over.
-        GLES20.glUniformMatrix4fv(muTexMatrixLoc, 1, false, mTexMatrix, 0);
-        GlUtil.checkGlError("glUniformMatrix4fv");
+//        GLES20.glBindTexture(GL_TEXTURE_TARGET, mTextureID);
 
         // Enable the "aPosition" vertex attribute.
         GLES20.glEnableVertexAttribArray(maPositionLoc);
@@ -251,68 +254,106 @@ public class ScreenStreamCropper extends HandlerThread {
                 2,
                 GLES20.GL_FLOAT,
                 false,
-                2*4,//Drawable2d.TEXTURE_COORD_STRIDE,
+                4*4,//Drawable2d.TEXTURE_COORD_STRIDE,
                 mTexCoordArray);
         GlUtil.checkGlError("glVertexAttribPointer");
 
-        GLES20.glViewport(x, -100, w, h);
-        GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 6);
+        // Copy the model / view / projection matrix over.
+        GLES20.glUniformMatrix4fv(muMVPMatrixLoc, 1, false, mMvpMatrix, 0);
+        GlUtil.checkGlError("glUniformMatrix4fv");
+//
+//        // Copy the texture transformation matrix over.
+        GLES20.glUniformMatrix4fv(muTexMatrixLoc, 1, false, mTexMatrix, 0);
+        GlUtil.checkGlError("glUniformMatrix4fv");
+
+//        GLES20.glViewport(x, -100, w, h);
+//        GLES20.glDrawArrays(GLES20.GL_TRIANGLES, 0, 6);
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
 //        GLES20.glClearColor(50f, 100f, 150f, 1f);
 //        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
 
 //        GLES20.glDisableVertexAttribArray(maPositionLoc);
 //        GLES20.glDisableVertexAttribArray(maTextureCoordLoc);
-//        GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, 0);
+//        GLES20.glBindTexture(GL_TEXTURE_TARGET, 0);
 //        GLES20.glUseProgram(0);
 
-        EGLExt.eglPresentationTimeANDROID(eglDisplay, eglSurface, timestamp);
-        EGL14.eglSwapBuffers(eglDisplay, eglSurface);
+        EGLExt.eglPresentationTimeANDROID(eglDisplay, eglWindowSurface, timestamp);
+        EGL14.eglSwapBuffers(eglDisplay, eglWindowSurface);
     }
 
 
-    private static final float FULL_RECTANGLE_COORDS[] = {
-            -1.0f, 1.0f, 0,
-            -1.0f, -1.0f, 0,
-            1.0f, 1.0f, 0,
+//    private static final float FULL_RECTANGLE_COORDS[] = {
+//            -1.0f, 1.0f, 0,
+//            -1.0f, -1.0f, 0,
+//            1.0f, 1.0f, 0,
+//
+//            -1.0f, -1.0f, 0,
+//            1.0f, -1.0f, 0,
+//            1.0f, 1.0f, 0
+//    };
+//    private static final float FULL_RECTANGLE_TEX_COORDS[] = {
+//            0f, 1f,
+//            0f, 0f,
+//            1f, 1f,
+//            0f, 0f,
+//            1f, 0f,
+//            1f, 1f
+//    };
 
-            -1.0f, -1.0f, 0,
-            1.0f, -1.0f, 0,
-            1.0f, 1.0f, 0
+    private static final float FULL_RECTANGLE_COORDS[] = {
+            -1.0f, -1.0f,1.0f,   // 0 bottom left
+            1.0f, -1.0f,1.0f,   // 1 bottom right
+            -1.0f,  1.0f,1.0f,   // 2 top left
+            1.0f,  1.0f,1.0f   // 3 top right
     };
+
     private static final float FULL_RECTANGLE_TEX_COORDS[] = {
-//            0, 0,
-//            0, 1,
-//            1, 0,
-//            0, 1,
-//            1, 1,
-//            1, 0
-            0f, 1f,
-            0f, 0f,
-            1f, 1f,
-            0f, 0f,
-            1f, 0f,
-            1f, 1f
+            0.0f, 1.0f, 1f, 1.0f,    // 0 bottom left
+            1.0f, 1.0f, 1f, 1.0f,     // 1 bottom right
+            0.0f, 0.0f, 1f, 1.0f,    // 2 top left
+            1.0f, 0.0f, 1f, 1.0f     // 3 top right
     };
 
     // Simple vertex shader, used for all programs.
-    private static final String VERTEX_SHADER =
-            "uniform mat4 uMVPMatrix;\n"
-                    + "uniform mat4 uTexMatrix;\n"
-                    + "attribute highp vec3 aPosition;\n"
-                    + "attribute highp vec2 aTextureCoord;\n"
-                    + "varying highp vec2 vTextureCoord;\n"
-                    + "\n"
-                    + "void main() {\n"
-                    + "	gl_Position = uMVPMatrix * vec4(aPosition,1);\n"
-                    + "	vTextureCoord = (uTexMatrix * vec4(aTextureCoord,1,1)).xy;\n"
-                    + "}\n";
+//    private static final String VERTEX_SHADER =
+//            "uniform mat4 uMVPMatrix;\n"
+//                    + "uniform mat4 uTexMatrix;\n"
+//                    + "attribute highp vec3 aPosition;\n"
+//                    + "attribute highp vec2 aTextureCoord;\n"
+//                    + "varying highp vec2 vTextureCoord;\n"
+//                    + "\n"
+//                    + "void main() {\n"
+//                    + "	gl_Position = uMVPMatrix * vec4(aPosition,1);\n"
+//                    + "	vTextureCoord = (uTexMatrix * vec4(aTextureCoord,1,1)).xy;\n"
+//                    + "}\n";
+//
+//    // Simple fragment shader for use with "normal" 2D textures.
+//    private static final String FRAGMENT_SHADER_2D =
+//            "precision mediump float;\n"
+//                    + "uniform sampler2D sTexture;\n"
+//                    + "varying highp vec2 vTextureCoord;\n"
+//                    + "void main() {\n"
+//                    + "  gl_FragColor = texture2D(sTexture, vTextureCoord);\n"
+//                    + "}";
 
-    // Simple fragment shader for use with "normal" 2D textures.
+
+    private static final String VERTEX_SHADER =
+            "uniform mat4 uMVPMatrix;\n" +
+                    "uniform mat4 uTexMatrix;\n" +
+                    "attribute vec4 aPosition;\n" +
+                    "attribute vec4 aTextureCoord;\n" +
+                    "varying vec4 vTextureCoord;\n" +
+                    "void main() {\n" +
+                    "    gl_Position = uMVPMatrix * aPosition;\n" +
+                    "    vTextureCoord = uTexMatrix * aTextureCoord;\n" +
+                    "}\n";
+
     private static final String FRAGMENT_SHADER_2D =
-            "precision mediump float;\n"
-                    + "uniform sampler2D sTexture;\n"
-                    + "varying highp vec2 vTextureCoord;\n"
-                    + "void main() {\n"
-                    + "  gl_FragColor = texture2D(sTexture, vTextureCoord);\n"
-                    + "}";
+            "#extension GL_OES_EGL_image_external : require\n" +
+                    "precision mediump float;\n" +      // highp here doesn't seem to matter
+                    "varying vec4 vTextureCoord;\n" +
+                    "uniform samplerExternalOES sTexture;\n" +
+                    "void main() {\n" +
+                    "    gl_FragColor = texture2D(sTexture, vTextureCoord.xy/vTextureCoord.z);" +
+                    "}\n";
 }

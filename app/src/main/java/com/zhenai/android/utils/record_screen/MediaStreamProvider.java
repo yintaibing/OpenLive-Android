@@ -66,8 +66,7 @@ public abstract class MediaStreamProvider {
     protected abstract void onCodecStarted(MediaCodec mediaCodec);
 
     protected long newPts() {
-//        return mPtsCounter.newPts();
-        return 0L;
+        return mPtsCounter.newPts();
     }
 
     public MediaCodec getMediaCodec() {
@@ -122,7 +121,7 @@ public abstract class MediaStreamProvider {
 
         MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
         while (!mQuit.get()) {
-            int outputIndex = codec.dequeueOutputBuffer(info, 0L);
+            int outputIndex = codec.dequeueOutputBuffer(info, 10000L);
             if (outputIndex >= 0) {
                 if (!ScreenRecorderUtils.hasCodecConfigFlag(info)) {
                     // BUFFER_FLAG_CODEC_CONFIG,已手动configure了codec，不再需要此buffer，

@@ -70,7 +70,7 @@ public class ScreenRecorder {
 
         try {
             mMuxerWrapper = new MediaMuxerWrapper(mOutputFile, mMediaStreamProviders.size());
-            mMuxerWrapper.setPtsCounter(mPtsCounter);
+            mMuxerWrapper.setPtsCounter(new PtsCounter(0));
         } catch (IOException e) {
             e.printStackTrace();
             return;

@@ -19,6 +19,7 @@ import android.widget.Toast;
 import com.zhenai.android.utils.record_screen.AudioEncodeConfig;
 import com.zhenai.android.utils.record_screen.ScreenRecorder;
 import com.zhenai.android.utils.record_screen.VideoEncodeConfig;
+import com.zhenai.android.utils.record_screen.copy.MediaEncoder;
 
 import java.io.File;
 import java.io.IOException;
@@ -50,6 +51,9 @@ public class RecordScreenManager implements RecordScreenLayout.OnOperationListen
     private RecordScreenLayout mRecordLayout;
     private ProgressDialog mProgressDialog;
     private RecordScreenPreviewDialog mPreviewDialog;
+
+    private MediaEncoder mMediaEncoder;
+    private boolean mUseMediaEncoder = true;
 
     private ScreenRecorder mScreenRecorder;
     private String mOriginOutputFileName;
@@ -98,6 +102,19 @@ public class RecordScreenManager implements RecordScreenLayout.OnOperationListen
                     // w / dm.w = h / dm.h
                     height = (int) (dm.heightPixels * mScaleFactor);
                 }
+
+
+                // 更新录制栏
+//                mRecordLayout.setRecordParams(mMinRecordSec, mMaxRecordSec);
+                mRecordLayout.notifyRecordStarted();
+
+                if (mUseMediaEncoder) {
+                    mMediaEncoder = new MediaEncoder(projection, width, height, 1);
+                    mMediaEncoder.start();
+                    return;
+                }
+
+
                 mOriginVideoConfig = new VideoEncodeConfig(
                         width,
                         height,
@@ -120,13 +137,9 @@ public class RecordScreenManager implements RecordScreenLayout.OnOperationListen
                 mOriginOutputFile = generateOutputFile(activity);
                 mScreenRecorder = new ScreenRecorder(mOriginOutputFile);
                 mScreenRecorder.addScreenStreamProvider(projection, mOriginVideoConfig);
-                mScreenRecorder.addMediaStreamProvider(new AgoraAudioStreamProvider(
-                        audioEncodeConfig));
+//                mScreenRecorder.addMediaStreamProvider(new AgoraAudioStreamProvider(
+//                        audioEncodeConfig));
                 mScreenRecorder.start();
-
-                // 更新录制栏
-//                mRecordLayout.setRecordParams(mMinRecordSec, mMaxRecordSec);
-                mRecordLayout.notifyRecordStarted();
 
                 // 开始计时
                 mCountTimeSubscription = Observable.interval(1L, TimeUnit.SECONDS)
@@ -262,6 +275,9 @@ public class RecordScreenManager implements RecordScreenLayout.OnOperationListen
     }
 
     private boolean isRecording() {
+        if (mUseMediaEncoder){
+            return mMediaEncoder != null;
+        }
         return mScreenRecorder != null && mScreenRecorder.isRecording();
     }
 
@@ -270,6 +286,9 @@ public class RecordScreenManager implements RecordScreenLayout.OnOperationListen
     }
 
     private void stopRecorderAndLayout() {
+        if (mUseMediaEncoder && mMediaEncoder != null) {
+            mMediaEncoder.stopScreen();
+        }
         if (mScreenRecorder != null) {
             mScreenRecorder.stop();
             mScreenRecorder = null;

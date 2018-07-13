@@ -1,20 +1,22 @@
 package com.zhenai.android.utils.record_screen;
 
 import android.annotation.TargetApi;
-import android.graphics.PixelFormat;
+import android.graphics.Bitmap;
+import android.graphics.SurfaceTexture;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
-import android.media.Image;
-import android.media.ImageReader;
 import android.media.MediaCodec;
 import android.media.MediaFormat;
 import android.media.projection.MediaProjection;
 import android.os.Build;
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.os.Message;
 import android.support.annotation.NonNull;
 import android.util.Log;
 import android.view.Surface;
 
-import java.nio.ByteBuffer;
+import com.zhenai.android.utils.record_screen.copy.EGLRender;
 
 @TargetApi(Build.VERSION_CODES.LOLLIPOP)
 public class ScreenStreamProvider extends MediaStreamProvider {
@@ -22,28 +24,46 @@ public class ScreenStreamProvider extends MediaStreamProvider {
     private Surface mCodecSurface;
     private VirtualDisplay mVirtualDisplay;
 
-    private ImageReader mImageReader;
-    private ScreenStreamCropper mCropper;
+    private HandlerThread mHandlerThread;
+    private Handler mHandler;
+//    private ImageReader mImageReader;
+    private SurfaceTexture mSurfaceTexture;
+    private Surface mVirtualDisplayOutputSurface;
+//    private ScreenStreamCropper mCropper;
+    private EGLRender mEGLRender;
 
     public ScreenStreamProvider(@NonNull MediaProjection mediaProjection,
                                 @NonNull VideoEncodeConfig config) {
         super(config);
         mMediaProjection = mediaProjection;
-        mCropper = new ScreenStreamCropper();
-        mCropper.start();
-        mCropper.initHandler();
+//        mCropper = new ScreenStreamCropper();
+
+        mHandlerThread = new HandlerThread("cropper");
     }
 
-//    @Override
-//    public void prepare() {
-//        mCropper.mHandler.post(new Runnable() {
-//            @Override
-//            public void run() {
-//                Log.e("ScreenStreamProvider", "prepare thread="+Thread.currentThread().getName());
-//                ScreenStreamProvider.super.prepare();
-//            }
-//        });
-//    }
+    @Override
+    public void prepare() {
+        mHandlerThread.start();
+        mHandler = new Handler(mHandlerThread.getLooper()) {
+            @Override
+            public void handleMessage(Message msg) {
+                switch (msg.what) {
+                    case 1:
+                        ScreenStreamProvider.super.prepare();
+                        break;
+
+                    case 2:
+//                        mCropper.destroyGL();
+                        break;
+
+                    case 3:
+//                        mCropper.render(newPts());
+                        break;
+                }
+            }
+        };
+        mHandler.sendMessageDelayed(mHandler.obtainMessage(1), 1000L);
+    }
 
     @Override
     public boolean isVideoStreamProvider() {
@@ -54,8 +74,8 @@ public class ScreenStreamProvider extends MediaStreamProvider {
     protected void onCodecCreated(MediaCodec mediaCodec) {
         final VideoEncodeConfig config = (VideoEncodeConfig) mConfig;
 
-        mCropper.w = config.width;
-        mCropper.h = config.height;
+//        mCropper.w = config.width;
+//        mCropper.h = config.height;
 
         mediaCodec.setCallback(new MediaCodec.Callback() {
             @Override
@@ -82,7 +102,7 @@ public class ScreenStreamProvider extends MediaStreamProvider {
     @Override
     protected void onCodecConfigured(MediaCodec mediaCodec) {
         mCodecSurface = mediaCodec.createInputSurface();
-        mCropper.mOutputSurface = mCodecSurface;
+//        mCropper.setmOutputSurface(mCodecSurface);
         Log.e(TAG, "created surface for codec: " + mediaCodec.getName());
     }
 
@@ -90,32 +110,46 @@ public class ScreenStreamProvider extends MediaStreamProvider {
     protected void onCodecStarted(MediaCodec mediaCodec) {
         final VideoEncodeConfig config = (VideoEncodeConfig) mConfig;
 
-        mCropper.signalPrepare();
-
-        mImageReader = ImageReader.newInstance(config.width, config.height,
-                PixelFormat.RGBA_8888, 1);
-        mImageReader.setOnImageAvailableListener(new ImageReader.OnImageAvailableListener() {
+        mEGLRender = new EGLRender(mCodecSurface, config.width, config.height, config.framerate);
+        mEGLRender.setCallBack(new EGLRender.onFrameCallBack() {
             @Override
-            public void onImageAvailable(ImageReader reader) {
-                Image image = reader.acquireNextImage();
-                Image.Plane[] planes = image.getPlanes();
-                if (planes != null && planes.length > 0) {
-                    ByteBuffer byteBuffer = planes[0].getBuffer();
-                    long pts = newPts();
-                    mCropper.signalRender(byteBuffer, pts);
-                }
-
-                image.close();
+            public void onUpdate() {
+                mux(false);
             }
-        }, mCropper.mHandler);
 
-        Surface imageReaderSurface = mImageReader.getSurface();
+            @Override
+            public void onCutScreen(Bitmap bitmap) {
+
+            }
+        });
+
+//        mCropper.createGL();
+//        mSurfaceTexture = new SurfaceTexture(mCropper.getmTextureID());
+//        mSurfaceTexture.setDefaultBufferSize(config.width, config.height);
+//        mSurfaceTexture.setOnFrameAvailableListener(new SurfaceTexture.OnFrameAvailableListener() {
+//            @Override
+//            public void onFrameAvailable(SurfaceTexture surfaceTexture) {
+//                mCropper.makeCurrent(true);
+//                surfaceTexture.updateTexImage();
+//                mCropper.render(newPts());
+//            }
+//        }, mHandler);
+
+//        mVirtualDisplayOutputSurface = new Surface(mSurfaceTexture);
+        mVirtualDisplayOutputSurface = mEGLRender.getDecodeSurface();
+
         mVirtualDisplay = mMediaProjection.createVirtualDisplay("ScreenStreamProvider",
                 config.width, config.height, config.dpi, DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC,
-                imageReaderSurface, null, null);
+                mVirtualDisplayOutputSurface, null, null);
+        mEGLRender.start();
         Log.e(TAG, "created virtual display: " + mVirtualDisplay);
     }
 
+    @Override
+    protected void stopInternal() {
+        super.stopInternal();
+        mHandler.sendMessage(mHandler.obtainMessage(2));
+    }
 
     @Override
     public void release() {
@@ -128,6 +162,7 @@ public class ScreenStreamProvider extends MediaStreamProvider {
             mMediaProjection.stop();
             mMediaProjection = null;
         }
-        mCropper.signalStop();
+//        mVirtualDisplayOutputSurface.release();
+//        mSurfaceTexture.release();
     }
 }
