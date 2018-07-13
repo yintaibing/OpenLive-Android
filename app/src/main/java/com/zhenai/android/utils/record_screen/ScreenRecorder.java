@@ -3,6 +3,7 @@ package com.zhenai.android.utils.record_screen;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.media.MediaCodec;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
@@ -10,6 +11,7 @@ import android.util.Log;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -68,6 +70,7 @@ public class ScreenRecorder {
 
         try {
             mMuxerWrapper = new MediaMuxerWrapper(mOutputFile, mMediaStreamProviders.size());
+            mMuxerWrapper.setPtsCounter(mPtsCounter);
         } catch (IOException e) {
             e.printStackTrace();
             return;
@@ -99,12 +102,14 @@ public class ScreenRecorder {
     }
 
     private void signalEndOfStream() {
-//        MediaCodec.BufferInfo eos = new MediaCodec.BufferInfo();
-//        ByteBuffer buffer = ByteBuffer.allocate(0);
-//        eos.set(0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
-//        for (MediaStreamProvider provider : mMediaStreamProviders) {
-//            mMuxerWrapper.writeSampleDataJust(provider.getMuxerTrackIndex(), buffer, eos);
-//        }
+        MediaCodec.BufferInfo eos = new MediaCodec.BufferInfo();
+        ByteBuffer buffer = ByteBuffer.allocate(0);
+        eos.set(0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
+        eos.presentationTimeUs = mPtsCounter.newPts();
+        for (MediaStreamProvider provider : mMediaStreamProviders) {
+            mMuxerWrapper.writeSampleData(
+                    provider.getMuxerTrackIndex(), buffer, eos);
+        }
     }
 
     private void release() {

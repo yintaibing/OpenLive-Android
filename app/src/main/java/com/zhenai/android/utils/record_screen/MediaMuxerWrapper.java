@@ -28,7 +28,10 @@ public class MediaMuxerWrapper {
     public MediaMuxerWrapper(File outputFile, int requiredTrackCount) throws IOException {
         mMuxer = new MediaMuxer(outputFile.getPath(), MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
         mRequiredTrackCount = requiredTrackCount;
-        ptsCounter = new PtsCounter(0);
+    }
+
+    public void setPtsCounter(PtsCounter ptsCounter) {
+        this.ptsCounter = ptsCounter;
     }
 
     public synchronized int addTrack(MediaStreamProvider provider, MediaFormat mediaFormat) {
@@ -58,25 +61,31 @@ public class MediaMuxerWrapper {
     public void writeSampleData(MediaStreamProvider provider,
                                 int outputIndex,
                                 MediaCodec.BufferInfo bufferInfo) {
+        if (ptsCounter != null) {
+            bufferInfo.presentationTimeUs = ptsCounter.newPts();
+        }
         if (mMuxerStarted) {
             // 所有流都ready了，写文件
             MediaCodec codec = provider.getMediaCodec();
             if (codec != null) {
                 int track = provider.getMuxerTrackIndex();
                 ByteBuffer byteBuffer = codec.getOutputBuffer(outputIndex);
-                if (track >= 0 && byteBuffer != null) {
-                    byteBuffer.position(bufferInfo.offset)
-                            .limit(bufferInfo.offset + bufferInfo.size);
-                    bufferInfo.presentationTimeUs=ptsCounter.newPts();
-                    Log.e(TAG, "write: pts="+bufferInfo.presentationTimeUs +
-                            " isVideo="+provider.isVideoStreamProvider());
-                    mMuxer.writeSampleData(track, byteBuffer, bufferInfo);
-                }
+                Log.e(TAG, "write: " +
+                        (provider.isVideoStreamProvider() ? "video" : "audio") +
+                        " pts="+bufferInfo.presentationTimeUs);
+                writeSampleData(track, byteBuffer, bufferInfo);
                 codec.releaseOutputBuffer(outputIndex, false);
             }
         } else if (mAddedTrackCount > 0) {
             // 有流还未ready，先缓存
             cache(provider, outputIndex, bufferInfo);
+        }
+    }
+
+    public void writeSampleData(int track, ByteBuffer byteBuffer,
+                                MediaCodec.BufferInfo bufferInfo) {
+        if (track >= 0 && byteBuffer != null) {
+            mMuxer.writeSampleData(track, byteBuffer, bufferInfo);
         }
     }
 
@@ -93,21 +102,26 @@ public class MediaMuxerWrapper {
 
     private void flushCache() {
         MediaTrackPending pending;
+        MediaCodec codec;
         LinkedList<Integer> indices;
         LinkedList<MediaCodec.BufferInfo> infos;
         MediaCodec.BufferInfo bufferInfo;
+        int outputIndex;
 
         int size = mPendings.size();
         for (int i = 0; i < size; i++) {
             pending = mPendings.get(mPendings.keyAt(i));
             if (pending != null) {
+                codec = pending.mProvider.getMediaCodec();
                 indices = pending.mPendingBufferIndices;
                 infos = pending.mPendingBufferInfos;
 
                 while ((bufferInfo = infos.poll()) != null) {
-                    int outputIndex = indices.poll();
-                    Log.e(TAG, "flushCache: isVideo="+pending.mProvider.isVideoStreamProvider());
-                    writeSampleData(pending.mProvider, outputIndex, bufferInfo);
+                    outputIndex = indices.poll();
+                    Log.e(TAG, "flushCache: " +
+                            (pending.mProvider.isVideoStreamProvider() ? "video" : "audio"));
+                    writeSampleData(pending.mTrack, codec.getOutputBuffer(outputIndex), bufferInfo);
+                    codec.releaseOutputBuffer(outputIndex, false);
                 }
 
                 pending.clear();

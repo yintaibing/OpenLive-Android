@@ -18,13 +18,11 @@ public class PtsCounter {
             result = 0L;
             return mPrevNano = result;
         } else {
-            result = nowNano - mFirstNano;
+            result = (nowNano - mFirstNano) / 1000L;
         }
 
-        result /= 1000L;
-
         if (result < mPrevNano) {
-            result = (mPrevNano - result) + result;
+            result += mPrevNano - result;
         }
         if (mPrevNano > 0L && result == mPrevNano) {
             result += 100L;

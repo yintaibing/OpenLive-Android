@@ -66,7 +66,8 @@ public abstract class MediaStreamProvider {
     protected abstract void onCodecStarted(MediaCodec mediaCodec);
 
     protected long newPts() {
-        return mPtsCounter.newPts();
+//        return mPtsCounter.newPts();
+        return 0L;
     }
 
     public MediaCodec getMediaCodec() {

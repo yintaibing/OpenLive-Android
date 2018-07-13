@@ -23,7 +23,7 @@ public class MediaTrackPending {
     public void addPending(int outputIndex, MediaCodec.BufferInfo bufferInfo) {
         mPendingBufferIndices.add(outputIndex);
         mPendingBufferInfos.add(bufferInfo);
-        Log.e("MediaTrackPending", mProviderName + " addPending outputIndex=" + outputIndex);
+        Log.e("Pending", mProviderName + " cache index=" + outputIndex);
     }
 
     public void setTrack(int track) {
