@@ -12,6 +12,8 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.EditText;
 
+import com.zhenai.android.utils.record_screen.biz.RecordScreenManager;
+
 import io.agora.openlive.R;
 import io.agora.openlive.model.ConstantApp;
 import io.agora.rtc.Constants;
@@ -69,6 +71,15 @@ public class MainActivity extends BaseActivity {
     }
 
     public void onClickJoin(View view) {
+        EditText editText = (EditText) findViewById(R.id.bitrate);
+        int bitrate;
+        try {
+            bitrate = Integer.parseInt(editText.getText().toString()) * 1000;
+        } catch (Exception e) {
+            bitrate = 800_000;
+        }
+        RecordScreenManager.VIDEO_BITRATE = bitrate;
+
         // show dialog to choose role
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
         builder.setMessage(R.string.msg_choose_role);

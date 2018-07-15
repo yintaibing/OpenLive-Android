@@ -29,8 +29,9 @@ public class MediaMuxerWrapper {
     private PresentationTimeCounter mAudioPtsCounter;
 
     private SparseArray<MediaTrackPending> mPendings = new SparseArray<>(2);
-
+private File file;
     public MediaMuxerWrapper(File outputFile, boolean hasVideo, boolean hasAudio) throws IOException {
+        file = outputFile;
         mMuxer = new MediaMuxer(outputFile.getPath(), MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
         if (hasVideo) {
             mRequiredTrackCount++;
@@ -233,6 +234,14 @@ public class MediaMuxerWrapper {
                 mStateCallback.onStop();
                 mStateCallback = null;
             }
+
+            long minLen = Math.min(mPrevAudioPts, mPrevVideoPts);
+            long seconds = minLen / 1000 / 1000;
+            float fileSizeMb = ((float) file.length()) / 1024f / 1024f;
+            float twoMinSizeMb = 120f / (float) seconds * fileSizeMb;
+            Log.e(TAG, "muxer stop, duration=" + seconds + "s" +
+                    " realSize=" + fileSizeMb + "M" +
+                    " sizeOf2Min=" + twoMinSizeMb + "M");
         }
     }
 

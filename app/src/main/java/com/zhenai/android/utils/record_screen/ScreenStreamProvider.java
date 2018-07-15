@@ -79,7 +79,7 @@ public class ScreenStreamProvider extends MediaStreamProvider {
 
             @Override
             public void onOutputBufferAvailable(@NonNull MediaCodec codec, int index, @NonNull MediaCodec.BufferInfo info) {
-                mux(index, info, true, true);
+                mux(index, info, true, false);
             }
 
             @Override

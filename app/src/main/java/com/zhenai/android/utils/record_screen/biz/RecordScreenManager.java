@@ -48,6 +48,8 @@ public class RecordScreenManager implements RecordScreenLayout.OnOperationListen
     private static final int REQUEST_CODE_RECORD_SCREEN = 81;
     public static final int REQUEST_CODE_PUBLISH_LONG_VIDEO = 82;
 
+    public static int VIDEO_BITRATE = 800_000;
+
     private final int RESOLUTION = 576;//VideoParam.VIDEO_RESOLUTION_540P;
 
     private RecordScreenLayout mRecordLayout;
@@ -121,7 +123,7 @@ public class RecordScreenManager implements RecordScreenLayout.OnOperationListen
                         width,
                         height,
                         1,
-                        800000,
+                        VIDEO_BITRATE,
                         15,
                         1,
                         MediaFormat.MIMETYPE_VIDEO_AVC,
