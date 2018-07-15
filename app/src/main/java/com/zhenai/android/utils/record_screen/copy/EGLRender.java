@@ -1,6 +1,7 @@
 package com.zhenai.android.utils.record_screen.copy;
 
 import android.graphics.Bitmap;
+import android.graphics.Rect;
 import android.graphics.SurfaceTexture;
 import android.opengl.EGL14;
 import android.opengl.EGLConfig;
@@ -107,13 +108,14 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
     }
 
 
-    public EGLRender(Surface surface, int mWidth, int mHeight, int fps) {
+    public EGLRender(Surface surface, int mWidth, int mHeight, int fps,
+                     Rect rect) {
         this.mWidth = mWidth;
         this.mHeight = mHeight;
         initFPs(fps);
         eglSetup(surface);
         makeCurrent();
-        setup();
+        setup(rect);
     }
 
     private void initFPs(int fps) {
@@ -211,8 +213,8 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
     /**
      * Creates interconnected instances of TextureRender, SurfaceTexture, and Surface.
      */
-    private void setup() {
-        mTextureRender = new STextureRender(mWidth, mHeight);
+    private void setup(Rect rect) {
+        mTextureRender = new STextureRender(mWidth, mHeight, rect);
         mTextureRender.surfaceCreated();
 
         if (VERBOSE) Log.d(TAG, "textureID=" + mTextureRender.getTextureId());

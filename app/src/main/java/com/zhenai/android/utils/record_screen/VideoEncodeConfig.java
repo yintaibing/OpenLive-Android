@@ -1,5 +1,6 @@
 package com.zhenai.android.utils.record_screen;
 
+import android.graphics.Rect;
 import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
 
@@ -11,6 +12,8 @@ public class VideoEncodeConfig extends MediaEncodeConfig {
     public int framerate;
     public int iframeInterval;
     public MediaCodecInfo.CodecProfileLevel codecProfileLevel;
+
+    public Rect mCropRegion;
 
     public VideoEncodeConfig(int width, int height, int dpi, int bitrate, int framerate,
                              int iframeInterval, String mimeType, String codecName,
@@ -27,9 +30,19 @@ public class VideoEncodeConfig extends MediaEncodeConfig {
         this.codecProfileLevel = codecProfileLevel;
     }
 
+    public void setCropRegion(Rect mCropRegion) {
+        this.mCropRegion = mCropRegion;
+    }
+
     @Override
     public MediaFormat toMediaFormat() {
-        MediaFormat format = MediaFormat.createVideoFormat(mimeType, width, height-200);
+        int outputHeight;
+        if (mCropRegion != null) {
+            outputHeight = Math.min(mCropRegion.height(), height);
+        } else {
+            outputHeight = height;
+        }
+        MediaFormat format = MediaFormat.createVideoFormat(mimeType, width, outputHeight);
         format.setInteger(MediaFormat.KEY_COLOR_FORMAT,
                 MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
         format.setInteger(MediaFormat.KEY_BIT_RATE, bitrate);

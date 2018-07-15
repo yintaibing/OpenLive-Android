@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.Rect;
 import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
 import android.media.ThumbnailUtils;
@@ -26,6 +27,7 @@ import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
 import io.agora.util.BitmapUtils;
+import io.agora.util.DensityUtils;
 import io.agora.util.FilePathUtils;
 import io.agora.util.FileUtils;
 import rx.Observable;
@@ -126,6 +128,12 @@ public class RecordScreenManager implements RecordScreenLayout.OnOperationListen
                         //"OMX.MTK.VIDEO.ENCODER.AVC",
                         "OMX.google.h264.encoder",
                         null);
+                mOriginVideoConfig.setCropRegion(new Rect(
+                        0,
+                        (int) (DensityUtils.getStatusBarHeight(activity) * mScaleFactor),
+                        width,
+                        (int) ((dm.heightPixels - DensityUtils.getDaoHangHeight(activity)) * mScaleFactor)
+                ));
                 AudioEncodeConfig audioEncodeConfig = new AudioEncodeConfig(
                         192000,
                         32000,

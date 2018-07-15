@@ -104,7 +104,8 @@ public class ScreenStreamProvider extends MediaStreamProvider {
     protected void onCodecStarted(MediaCodec mediaCodec) {
         final VideoEncodeConfig config = (VideoEncodeConfig) getConfig();
 
-        mEGLRender = new EGLRender(mCodecSurface, config.width, config.height, config.framerate);
+        mEGLRender = new EGLRender(mCodecSurface, config.width, config.height, config.framerate,
+                config.mCropRegion);
         mEGLRender.mSurfaceTexture.setOnFrameAvailableListener(new SurfaceTexture.OnFrameAvailableListener() {
             @Override
             public void onFrameAvailable(SurfaceTexture surfaceTexture) {

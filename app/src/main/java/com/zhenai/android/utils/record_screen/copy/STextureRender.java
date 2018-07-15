@@ -1,5 +1,6 @@
 package com.zhenai.android.utils.record_screen.copy;
 
+import android.graphics.Rect;
 import android.opengl.GLES11Ext;
 import android.opengl.GLES20;
 import android.opengl.Matrix;
@@ -71,11 +72,13 @@ public  class STextureRender {
     private int maTextureHandle;
     private int mWidth;
     private int mHeight;
+    private Rect mCropRegion;
 
-    public STextureRender(int mwidth, int mHeight) {
+    public STextureRender(int mwidth, int mHeight, Rect cropRegion) {
         this();
         this.mWidth = mwidth;
         this.mHeight = mHeight;
+        mCropRegion = cropRegion;
     }
 
     public STextureRender() {
@@ -165,7 +168,7 @@ public  class STextureRender {
         GLES20.glUniformMatrix4fv(muSTMatrixHandle, 1, false, mSTMatrix, 0);
 
 
-        GLES20.glViewport(0, -150, mWidth, mHeight);
+        GLES20.glViewport(0, mCropRegion != null ? mCropRegion.bottom - mHeight : 0, mWidth, mHeight);
         // Draw the rect.
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
 

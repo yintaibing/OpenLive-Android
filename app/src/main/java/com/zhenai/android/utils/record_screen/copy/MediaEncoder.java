@@ -167,7 +167,7 @@ public class MediaEncoder extends Thread {
         });
         mEncoder.configure(mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
         surface = mEncoder.createInputSurface();
-        eglRender = new EGLRender(surface, screen_width, screen_height, video_fps);
+        eglRender = new EGLRender(surface, screen_width, screen_height, video_fps, null);
         eglRender.setCallBack(new EGLRender.onFrameCallBack() {
             @Override
             public void onUpdate() {
