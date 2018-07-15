@@ -6,6 +6,14 @@ import io.agora.openlive.model.WorkerThread;
 
 public class AGApplication extends Application {
 
+    public static AGApplication instance;
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+        instance = this;
+    }
+
     private WorkerThread mWorkerThread;
 
     public synchronized void initWorkerThread() {

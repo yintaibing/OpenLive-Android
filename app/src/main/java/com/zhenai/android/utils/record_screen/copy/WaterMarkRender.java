@@ -1,34 +1,39 @@
 package com.zhenai.android.utils.record_screen.copy;
 
-import android.opengl.GLES11Ext;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.opengl.GLES20;
+import android.opengl.GLUtils;
 import android.opengl.Matrix;
 
 import java.nio.FloatBuffer;
 
+import io.agora.openlive.AGApplication;
+import io.agora.openlive.R;
+
 /**
  * Created by guoheng on 2016/8/31.
  */
-public  class STextureRender {
+public  class WaterMarkRender {
     private static final int FLOAT_SIZE_BYTES = 4;
     private static final String TAG = "STextureRendering";
 
 
-    private static final int GL_TEXTURE_TARGET = GLES11Ext.GL_TEXTURE_EXTERNAL_OES;
+    private static final int GL_TEXTURE_TARGET = GLES20.GL_TEXTURE_2D;
 
 
     private static final float FULL_RECTANGLE_COORDS[] = {
-            -1.0f, -1.0f,1.0f,   // 0 bottom left
-            1.0f, -1.0f,1.0f,   // 1 bottom right
-            -1.0f,  1.0f,1.0f,   // 2 top left
-            1.0f,  1.0f,1.0f   // 3 top right
+            -1.0f, -1.0f,//1.0f,   // 0 bottom left
+            1.0f, -1.0f,//1.0f,   // 1 bottom right
+            -1.0f,  1.0f,//1.0f,   // 2 top left
+            1.0f,  1.0f,//1.0f   // 3 top right
     };
 
     private static final float FULL_RECTANGLE_TEX_COORDS[] = {
-            0.0f, 1.0f, 1f,1.0f,    // 0 bottom left
-            1.0f, 1.0f,1f,1.0f,     // 1 bottom right
-            0.0f, 0.0f, 1f,1.0f,    // 2 top left
-            1.0f, 0.0f ,1f,1.0f     // 3 top right
+            0.0f, 1.0f, //1f,1.0f,    // 0 bottom left
+            1.0f, 1.0f,//1f,1.0f,     // 1 bottom right
+            0.0f, 0.0f, //1f,1.0f,    // 2 top left
+            1.0f, 0.0f ,//1f,1.0f     // 3 top right
     };
 
     private static final FloatBuffer FULL_RECTANGLE_BUF =
@@ -39,22 +44,22 @@ public  class STextureRender {
 
     private static final String VERTEX_SHADER =
             "uniform mat4 uMVPMatrix;\n" +
-                    "uniform mat4 uSTMatrix;\n" +
+//                    "uniform mat4 uSTMatrix;\n" +
                     "attribute vec4 aPosition;\n" +
                     "attribute vec4 aTextureCoord;\n" +
-                    "varying vec4 vTextureCoord;\n" +
+                    "varying vec2 vTextureCoord;\n" +
                     "void main() {\n" +
                     "    gl_Position = uMVPMatrix * aPosition;\n" +
-                    "    vTextureCoord = uSTMatrix * aTextureCoord;\n" +
+                    "    vTextureCoord = aTextureCoord.xy;\n" +
                     "}\n";
 
     private static final String FRAGMENT_SHADER =
-            "#extension GL_OES_EGL_image_external : require\n" +
+//            "#extension GL_OES_EGL_image_external : require\n" +
                     "precision mediump float;\n" +      // highp here doesn't seem to matter
-                    "varying vec4 vTextureCoord;\n" +
-                    "uniform samplerExternalOES sTexture;\n" +
+                    "varying vec2 vTextureCoord;\n" +
+                    "uniform sampler2D sTexture;\n" +
                     "void main() {\n" +
-                    "    gl_FragColor = texture2D(sTexture, vTextureCoord.xy/vTextureCoord.z);" +
+                    "    gl_FragColor = texture2D(sTexture, vTextureCoord);" +
                     "}\n";
 
 
@@ -71,14 +76,15 @@ public  class STextureRender {
     private int maTextureHandle;
     private int mWidth;
     private int mHeight;
+    private Bitmap mBitmap;
 
-    public STextureRender(int mwidth, int mHeight) {
+    public WaterMarkRender(int mwidth, int mHeight) {
         this();
         this.mWidth = mwidth;
         this.mHeight = mHeight;
     }
 
-    public STextureRender() {
+    public WaterMarkRender() {
         Matrix.setIdentityM(mSTMatrix, 0);
     }
 
@@ -101,7 +107,7 @@ public  class STextureRender {
         maPositionHandle = GLES20.glGetAttribLocation(mProgram, "aPosition");
         maTextureHandle = GLES20.glGetAttribLocation(mProgram, "aTextureCoord");
         muMVPMatrixHandle = GLES20.glGetUniformLocation(mProgram, "uMVPMatrix");
-        muSTMatrixHandle = GLES20.glGetUniformLocation(mProgram, "uSTMatrix");
+//        muSTMatrixHandle = GLES20.glGetUniformLocation(mProgram, "uSTMatrix");
 
 
         mTextureID = initTex();
@@ -121,6 +127,9 @@ public  class STextureRender {
      * @return texture ID
      */
     public int initTex() {
+        mBitmap = BitmapFactory.decodeResource(AGApplication.instance.getResources(),
+                R.drawable.live_video_record_screen_water_mark);
+
         int[] tex = new int[1];
         GLES20.glGenTextures(1, tex, 0);
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
@@ -133,7 +142,9 @@ public  class STextureRender {
                 GLES20.GL_TEXTURE_MIN_FILTER, GLES20.GL_NEAREST);
         GLES20.glTexParameteri(GL_TEXTURE_TARGET,
                 GLES20.GL_TEXTURE_MAG_FILTER, GLES20.GL_NEAREST);
+        GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, mBitmap, 0);
         GLES20.glBindTexture(GL_TEXTURE_TARGET, 0);
+
         return tex[0];
     }
 
@@ -144,28 +155,29 @@ public  class STextureRender {
     public void drawFrame() {
         GLES20.glUseProgram(mProgram);
 
+
         GLES20.glBindTexture(GL_TEXTURE_TARGET, mTextureID);
 
         // Enable the "aPosition" vertex attribute.
         GLES20.glEnableVertexAttribArray(maPositionHandle);
 
         // Connect vertexBuffer to "aPosition".
-        GLES20.glVertexAttribPointer(maPositionHandle, 3,
-                GLES20.GL_FLOAT, false, 3*FLOAT_SIZE_BYTES, FULL_RECTANGLE_BUF);
+        GLES20.glVertexAttribPointer(maPositionHandle, 2,
+                GLES20.GL_FLOAT, false, 2*FLOAT_SIZE_BYTES, FULL_RECTANGLE_BUF);
 
         // Enable the "aTextureCoord" vertex attribute.
         GLES20.glEnableVertexAttribArray(maTextureHandle);
 
         // Connect texBuffer to "aTextureCoord".
-        GLES20.glVertexAttribPointer(maTextureHandle, 4,
-                GLES20.GL_FLOAT, false, 4*FLOAT_SIZE_BYTES, FULL_RECTANGLE_TEX_BUF);
+        GLES20.glVertexAttribPointer(maTextureHandle, 2,
+                GLES20.GL_FLOAT, false, 2*FLOAT_SIZE_BYTES, FULL_RECTANGLE_TEX_BUF);
 
         Matrix.setIdentityM(mMVPMatrix, 0);
         GLES20.glUniformMatrix4fv(muMVPMatrixHandle, 1, false, mMVPMatrix, 0);
-        GLES20.glUniformMatrix4fv(muSTMatrixHandle, 1, false, mSTMatrix, 0);
+//        GLES20.glUniformMatrix4fv(muSTMatrixHandle, 1, false, mSTMatrix, 0);
 
 
-        GLES20.glViewport(0, -150, mWidth, mHeight);
+        GLES20.glViewport(0, 300, mBitmap.getWidth(), mBitmap.getHeight());
         // Draw the rect.
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
 

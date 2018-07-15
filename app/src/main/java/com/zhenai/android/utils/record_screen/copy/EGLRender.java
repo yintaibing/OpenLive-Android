@@ -30,6 +30,7 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
     private static final boolean VERBOSE = false;           // lots of logging
 
     private STextureRender mTextureRender;
+    private WaterMarkRender mWaterMarkRender;
     public SurfaceTexture mSurfaceTexture;
 
     private EGLDisplay mEGLDisplay = EGL14.EGL_NO_DISPLAY;
@@ -219,6 +220,10 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
         mSurfaceTexture.setDefaultBufferSize(mWidth, mHeight);
         mSurfaceTexture.setOnFrameAvailableListener(this);
         decodeSurface = new Surface(mSurfaceTexture);
+
+
+        mWaterMarkRender = new WaterMarkRender();
+        mWaterMarkRender.surfaceCreated();
     }
 
     public Surface getDecodeSurface() {
@@ -306,6 +311,7 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
 
     public void drawImage() {
         mTextureRender.drawFrame();
+        mWaterMarkRender.drawFrame();
     }
 
     /**
@@ -336,6 +342,8 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
 
     public void updateTexAndDraw(long customPts) {
         makeCurrent(1);
+        GLES20.glEnable(GLES20.GL_BLEND); //打开混合功能
+        GLES20.glBlendFunc(GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA); //指定混合模式
 
         //        awaitNewImage();
         mSurfaceTexture.updateTexImage();

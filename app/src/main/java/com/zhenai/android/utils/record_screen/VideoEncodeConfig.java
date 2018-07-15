@@ -29,7 +29,7 @@ public class VideoEncodeConfig extends MediaEncodeConfig {
 
     @Override
     public MediaFormat toMediaFormat() {
-        MediaFormat format = MediaFormat.createVideoFormat(mimeType, width, height);
+        MediaFormat format = MediaFormat.createVideoFormat(mimeType, width, height-200);
         format.setInteger(MediaFormat.KEY_COLOR_FORMAT,
                 MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
         format.setInteger(MediaFormat.KEY_BIT_RATE, bitrate);
