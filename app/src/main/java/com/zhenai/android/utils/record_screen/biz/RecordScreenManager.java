@@ -53,7 +53,7 @@ public class RecordScreenManager implements RecordScreenLayout.OnOperationListen
     private RecordScreenPreviewDialog mPreviewDialog;
 
     private MediaEncoder mMediaEncoder;
-    private boolean mUseMediaEncoder = true;
+    private boolean mUseMediaEncoder = false;
 
     private ScreenRecorder mScreenRecorder;
     private String mOriginOutputFileName;
@@ -127,7 +127,7 @@ public class RecordScreenManager implements RecordScreenLayout.OnOperationListen
                         "OMX.google.h264.encoder",
                         null);
                 AudioEncodeConfig audioEncodeConfig = new AudioEncodeConfig(
-                        512000,
+                        192000,
                         32000,
                         1,
                         MediaCodecInfo.CodecProfileLevel.AACObjectLC,
@@ -136,9 +136,8 @@ public class RecordScreenManager implements RecordScreenLayout.OnOperationListen
 
                 mOriginOutputFile = generateOutputFile(activity);
                 mScreenRecorder = new ScreenRecorder(mOriginOutputFile);
-                mScreenRecorder.addScreenStreamProvider(projection, mOriginVideoConfig);
-//                mScreenRecorder.addMediaStreamProvider(new AgoraAudioStreamProvider(
-//                        audioEncodeConfig));
+                mScreenRecorder.setScreenStream(projection, mOriginVideoConfig);
+                mScreenRecorder.setAgoraAudioStream(audioEncodeConfig);
                 mScreenRecorder.start();
 
                 // 开始计时

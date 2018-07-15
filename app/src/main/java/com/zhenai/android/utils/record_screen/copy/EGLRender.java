@@ -30,7 +30,7 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
     private static final boolean VERBOSE = false;           // lots of logging
 
     private STextureRender mTextureRender;
-    private SurfaceTexture mSurfaceTexture;
+    public SurfaceTexture mSurfaceTexture;
 
     private EGLDisplay mEGLDisplay = EGL14.EGL_NO_DISPLAY;
     private EGLContext mEGLContext = EGL14.EGL_NO_CONTEXT;
@@ -334,6 +334,20 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
         }
     }
 
+    public void updateTexAndDraw(long customPts) {
+        makeCurrent(1);
+
+        //        awaitNewImage();
+        mSurfaceTexture.updateTexImage();
+
+        current_time = System.currentTimeMillis();
+        if (current_time - time >= video_interval/2) {
+            drawImage();
+            setPresentationTime(customPts >= 0L ? customPts : computePresentationTimeNsec(count++));
+            swapBuffers();
+            time = current_time;
+        }
+    }
 
     /**
      * 获取当前屏幕信息

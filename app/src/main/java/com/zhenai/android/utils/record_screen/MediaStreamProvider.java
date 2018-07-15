@@ -15,10 +15,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public abstract class MediaStreamProvider {
     protected static final String TAG = MediaStreamProvider.class.getSimpleName();
 
-    protected MediaEncodeConfig mConfig;
+    private MediaEncodeConfig mConfig;
     private MediaCodec mMediaCodec;
     private MediaMuxerWrapper mMuxerWrapper;
-    private PtsCounter mPtsCounter;
+    private PresentationTimeCounter mPtsCounter;
 
     protected AtomicBoolean mQuit = new AtomicBoolean(false);
     protected volatile int mMuxerTrackIndex = -1;
@@ -31,8 +31,8 @@ public abstract class MediaStreamProvider {
         this.mMuxerWrapper = muxerWrapper;
     }
 
-    public void setPtsCounter(PtsCounter ptsCounter) {
-        mPtsCounter = ptsCounter;
+    public void setPtsCounter(PresentationTimeCounter mPtsCounter) {
+        this.mPtsCounter = mPtsCounter;
     }
 
     public void prepare() {
@@ -52,11 +52,12 @@ public abstract class MediaStreamProvider {
         onCodecStarted(mMediaCodec);
     }
 
-    public void addMuxerTrack(MediaFormat mediaFormat) {
-        if (mediaFormat != null && mMuxerTrackIndex < 0 && mMuxerWrapper != null) {
-            mMuxerTrackIndex = mMuxerWrapper.addTrack(this, mediaFormat);
+    public void addMuxerTrack(MediaFormat codecOutputFormat) {
+        if (codecOutputFormat != null && mMuxerTrackIndex < 0 && mMuxerWrapper != null) {
+            mMuxerTrackIndex = mMuxerWrapper.addTrack(codecOutputFormat, isVideoStreamProvider());
         }
     }
+
     public abstract boolean isVideoStreamProvider();
 
     protected abstract void onCodecCreated(MediaCodec mediaCodec);
@@ -65,19 +66,30 @@ public abstract class MediaStreamProvider {
 
     protected abstract void onCodecStarted(MediaCodec mediaCodec);
 
-    protected long newPts() {
-        return mPtsCounter.newPts();
+    protected long newPresentationTime() {
+        return mPtsCounter != null ? mPtsCounter.newPresentationTimeUs() : 0L;
     }
 
     public MediaCodec getMediaCodec() {
         return mMediaCodec;
     }
 
+    public MediaEncodeConfig getConfig() {
+        return mConfig;
+    }
+
     public int getMuxerTrackIndex() {
         return mMuxerTrackIndex;
     }
 
-    public void mux(int outputIndex, MediaCodec.BufferInfo bufferInfo) {
+    public void mux(int outputIndex,
+                    MediaCodec.BufferInfo bufferInfo,
+                    boolean isVideo,
+                    boolean resetPresentationTime) {
+        if (mQuit.get()) {
+            stopInternal();
+            return;
+        }
         MediaMuxerWrapper muxer = mMuxerWrapper;
         MediaCodec codec = mMediaCodec;
         if (codec == null || muxer == null) {
@@ -90,12 +102,11 @@ public abstract class MediaStreamProvider {
             if (!ScreenRecorderUtils.hasCodecConfigFlag(bufferInfo)) {
                 // BUFFER_FLAG_CODEC_CONFIG,已手动configure了codec，不再需要此buffer，
                 // 否则可能导致chrome无法播放
-                Log.e(TAG, "video: pts="+bufferInfo.presentationTimeUs);
-                muxer.writeSampleData(this, outputIndex, bufferInfo);
-            } else {
-                // 未被处理的buffer，直接释放掉
-                codec.releaseOutputBuffer(outputIndex, false);
+                muxer.writeSampleData(mMuxerTrackIndex,
+                        codec.getOutputBuffer(outputIndex), bufferInfo,
+                        isVideo, resetPresentationTime);
             }
+            codec.releaseOutputBuffer(outputIndex, false);
 
             if (ScreenRecorderUtils.hasEosFlag(bufferInfo)) {
                 mQuit.set(true);
@@ -104,46 +115,52 @@ public abstract class MediaStreamProvider {
 
         if (mQuit.get()) {
             stopInternal();
-            releaseCodecAndMuxer();
         }
     }
 
-    public void mux(boolean endOfStream) {
-        MediaCodec codec = mMediaCodec;
-        MediaMuxerWrapper muxer = mMuxerWrapper;
-        if (codec == null || muxer == null) {
+//    public void mux(boolean endOfStream) {
+//        MediaCodec codec = mMediaCodec;
+//        MediaMuxerWrapper muxer = mMuxerWrapper;
+//        if (codec == null || muxer == null) {
+//            return;
+//        }
+//
+//        if (endOfStream) {
+//            codec.signalEndOfInputStream();
+//        }
+//
+//        MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
+//        while (!mQuit.get()) {
+//            int outputIndex = codec.dequeueOutputBuffer(info, 10000L);
+//            if (outputIndex >= 0) {
+//                if (!ScreenRecorderUtils.hasCodecConfigFlag(info)) {
+//                    // BUFFER_FLAG_CODEC_CONFIG,已手动configure了codec，不再需要此buffer，
+//                    // 否则可能导致chrome无法播放
+//                    muxer.doWriteSampleData(this, outputIndex, info);
+//                } else {
+//                    // 未被处理的buffer，直接释放掉
+//                    codec.releaseOutputBuffer(outputIndex, false);
+//                }
+//            } else if (outputIndex == MediaCodec.INFO_TRY_AGAIN_LATER) {
+//                // -1,INFO_TRY_AGAIN_LATER,稍后再试
+//                if (!endOfStream) {
+//                    break;
+//                }
+//            } else if (outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+//                // -2,INFO_OUTPUT_FORMAT_CHANGED,格式变化,添加轨道
+//                addMuxerTrack(codec.getOutputFormat());
+//            }
+//        }
+//    }
+
+    public void mux(byte[] byteBuffer, int length,
+                    long presentationTime,
+                    boolean isVideo,
+                    boolean resetPresentationTime) {
+        if (mQuit.get()) {
+            stopInternal();
             return;
         }
-
-        if (endOfStream) {
-            codec.signalEndOfInputStream();
-        }
-
-        MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
-        while (!mQuit.get()) {
-            int outputIndex = codec.dequeueOutputBuffer(info, 10000L);
-            if (outputIndex >= 0) {
-                if (!ScreenRecorderUtils.hasCodecConfigFlag(info)) {
-                    // BUFFER_FLAG_CODEC_CONFIG,已手动configure了codec，不再需要此buffer，
-                    // 否则可能导致chrome无法播放
-                    muxer.writeSampleData(this, outputIndex, info);
-                } else {
-                    // 未被处理的buffer，直接释放掉
-                    codec.releaseOutputBuffer(outputIndex, false);
-                }
-            } else if (outputIndex == MediaCodec.INFO_TRY_AGAIN_LATER) {
-                // -1,INFO_TRY_AGAIN_LATER,稍后再试
-                if (!endOfStream) {
-                    break;
-                }
-            } else if (outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
-                // -2,INFO_OUTPUT_FORMAT_CHANGED,格式变化,添加轨道
-                addMuxerTrack(codec.getOutputFormat());
-            }
-        }
-    }
-
-    public void mux(byte[] byteBuffer, int length) {
         MediaMuxerWrapper muxer = mMuxerWrapper;
         MediaCodec codec = mMediaCodec;
         if (codec == null || muxer == null) {
@@ -157,9 +174,7 @@ public abstract class MediaStreamProvider {
                 inputBuffer.clear();
                 inputBuffer.put(byteBuffer, 0, length);
 
-                long pts = newPts();
-                Log.e(TAG, "audio: pts="+pts);
-                codec.queueInputBuffer(inputIndex, 0, length, pts,
+                codec.queueInputBuffer(inputIndex, 0, length, presentationTime,
                         mQuit.get() || length <= 0 ? MediaCodec.BUFFER_FLAG_END_OF_STREAM : 0);
             }
         }
@@ -172,11 +187,11 @@ public abstract class MediaStreamProvider {
                 if (!ScreenRecorderUtils.hasCodecConfigFlag(bufferInfo)) {
                     // BUFFER_FLAG_CODEC_CONFIG,已手动configure了codec，不再需要此buffer，
                     // 否则可能导致chrome无法播放
-                    muxer.writeSampleData(this, outputIndex, bufferInfo);
-                } else {
-                    // 未被处理的buffer，直接释放掉
-                    codec.releaseOutputBuffer(outputIndex, false);
+                    muxer.writeSampleData(getMuxerTrackIndex(),
+                            codec.getOutputBuffer(outputIndex), bufferInfo,
+                            isVideo, resetPresentationTime);
                 }
+                codec.releaseOutputBuffer(outputIndex, false);
 
                 if (ScreenRecorderUtils.hasEosFlag(bufferInfo)) {
                     mQuit.set(true);
@@ -191,7 +206,26 @@ public abstract class MediaStreamProvider {
 
         if (mQuit.get()) {
             stopInternal();
-            releaseCodecAndMuxer();
+        }
+    }
+
+    public void enqueue(byte[] byteBuffer, int length,
+                        long presentationTime) {
+        MediaCodec codec = mMediaCodec;
+        if (codec == null) {
+            return;
+        }
+
+        int inputIndex = codec.dequeueInputBuffer(-1);
+        if (inputIndex >= 0) {
+            ByteBuffer inputBuffer = codec.getInputBuffer(inputIndex);
+            if (inputBuffer != null) {
+                inputBuffer.clear();
+                inputBuffer.put(byteBuffer, 0, length);
+
+                codec.queueInputBuffer(inputIndex, 0, length, presentationTime,
+                        mQuit.get() || length <= 0 ? MediaCodec.BUFFER_FLAG_END_OF_STREAM : 0);
+            }
         }
     }
 
@@ -204,17 +238,11 @@ public abstract class MediaStreamProvider {
         if (codec != null) {
             try {
                 codec.stop();
+                Log.e(TAG, "stop codec");
             } catch (Exception e) {
                 e.printStackTrace();
             }
         }
-    }
-
-    public void release() {
-//        mMuxerTrackIndex = -1;
-    }
-
-    private void releaseCodecAndMuxer() {
         mMediaCodec = null;
         mMuxerWrapper = null;
     }

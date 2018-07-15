@@ -5,37 +5,57 @@ import android.media.MediaCodec;
 import android.os.Build;
 import android.util.Log;
 
+import java.nio.ByteBuffer;
 import java.util.LinkedList;
 
 @TargetApi(Build.VERSION_CODES.LOLLIPOP)
 public class MediaTrackPending {
-    MediaStreamProvider mProvider;
-    String mProviderName;
-    int mTrack;
-    LinkedList<Integer> mPendingBufferIndices = new LinkedList<>();
-    LinkedList<MediaCodec.BufferInfo> mPendingBufferInfos = new LinkedList<>();
+    private int mTrack;
+    private LinkedList<ByteBuffer> mPendingBuffers;
+    private LinkedList<MediaCodec.BufferInfo> mPendingBufferInfos;
+    private long mTotalSize;
+    private long mTotalCapacity;
 
-    public MediaTrackPending(MediaStreamProvider provider) {
-        mProvider = provider;
-        mProviderName = provider.getClass().getSimpleName();
+    public MediaTrackPending(int track) {
+        setTrack(track);
+        mPendingBuffers = new LinkedList<>();
+        mPendingBufferInfos = new LinkedList<>();
     }
 
-    public void addPending(int outputIndex, MediaCodec.BufferInfo bufferInfo) {
-        mPendingBufferIndices.add(outputIndex);
+    public void addPending(ByteBuffer byteBuffer, MediaCodec.BufferInfo bufferInfo) {
+        mPendingBuffers.add(byteBuffer);
         mPendingBufferInfos.add(bufferInfo);
-        Log.e("Pending", mProviderName + " cache index=" + outputIndex);
+        mTotalCapacity += byteBuffer.capacity();
+        mTotalSize += bufferInfo.size;
+    }
+
+    public void printTotalCapacityAndSize() {
+        Log.e("MediaTrackPending", "track=" + mTrack +
+                " num=" + mPendingBuffers.size() +
+                " totalCapacity=" + mTotalCapacity +
+                " totalSize=" + mTotalSize);
     }
 
     public void setTrack(int track) {
         mTrack = track;
     }
 
+    public int getTrack() {
+        return mTrack;
+    }
+
+    public LinkedList<ByteBuffer> getPendingBuffers() {
+        return mPendingBuffers;
+    }
+
+    public LinkedList<MediaCodec.BufferInfo> getPendingBufferInfos() {
+        return mPendingBufferInfos;
+    }
+
     public void clear() {
-        mProvider = null;
-        mProviderName = null;
         mPendingBufferInfos.clear();
         mPendingBufferInfos = null;
-        mPendingBufferIndices.clear();
-        mPendingBufferIndices = null;
+        mPendingBuffers.clear();
+        mPendingBuffers = null;
     }
 }

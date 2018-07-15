@@ -3,16 +3,15 @@ package com.zhenai.android.utils.record_screen;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
-import android.media.MediaCodec;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.util.Log;
 
+import com.zhenai.android.utils.record_screen.biz.AgoraAudioStreamProvider;
+
 import java.io.File;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class ScreenRecorder {
@@ -22,9 +21,9 @@ public class ScreenRecorder {
     private static final int STATE_STOPPED = 2;
 
     private File mOutputFile;
-    private PtsCounter mPtsCounter;
     private MediaMuxerWrapper mMuxerWrapper;
-    private ArrayList<MediaStreamProvider> mMediaStreamProviders;
+    private ScreenStreamProvider mScreenStreamProvider;
+    private AgoraAudioStreamProvider mAgoraAudioStreamProvider;
     private AtomicInteger mState = new AtomicInteger(STATE_DEFAULT);
 
     public ScreenRecorder(File outputFile) {
@@ -32,99 +31,82 @@ public class ScreenRecorder {
         if (outputFile == null || !outputFile.exists() || outputFile.isDirectory()) {
             throw new IllegalArgumentException("illegal output file");
         }
-        mPtsCounter = new PtsCounter(0);
-        mMediaStreamProviders = new ArrayList<>(1);
     }
 
-    public void addScreenStreamProvider(MediaProjection mediaProjection,
-                                        VideoEncodeConfig videoEncodeConfig) {
-        if (mediaProjection == null || videoEncodeConfig == null) {
-            return;
-        }
-
-        ScreenStreamProvider screenStreamProvider = new ScreenStreamProvider(
-                mediaProjection, videoEncodeConfig);
-        addMediaStreamProvider(screenStreamProvider);
+    public void setScreenStream(MediaProjection mediaProjection,
+                                VideoEncodeConfig videoEncodeConfig) {
+        mScreenStreamProvider = new ScreenStreamProvider(mediaProjection, videoEncodeConfig);
     }
 
-    public void addMediaStreamProvider(MediaStreamProvider provider) {
-        if (provider.isVideoStreamProvider()) {
-            for (MediaStreamProvider p : mMediaStreamProviders) {
-                if (p.isVideoStreamProvider()) {
-                    throw new IllegalArgumentException("只能添加1个视频provider");
-                }
-            }
-        }
-        // 为了方便查找，将video provider放在0
-        mMediaStreamProviders.add(
-                provider.isVideoStreamProvider() ? 0 : mMediaStreamProviders.size(), provider);
-        Log.e(TAG, "added media stream provider: " + provider.getClass().getSimpleName());
+    public void setAgoraAudioStream(AudioEncodeConfig audioEncodeConfig) {
+        mAgoraAudioStreamProvider = new AgoraAudioStreamProvider(audioEncodeConfig);
     }
 
     public void start() {
         if (mState.get() != STATE_DEFAULT) {
             throw new IllegalStateException("state should be STATE_DEFAULT");
         }
+        if (mScreenStreamProvider == null && mAgoraAudioStreamProvider == null) {
+            throw new IllegalStateException("no provider added");
+        }
 
         mState.set(STATE_RECORDING);
 
         try {
-            mMuxerWrapper = new MediaMuxerWrapper(mOutputFile, mMediaStreamProviders.size());
-            mMuxerWrapper.setPtsCounter(new PtsCounter(0));
+            mMuxerWrapper = new MediaMuxerWrapper(mOutputFile,
+                    mScreenStreamProvider != null,
+                    mAgoraAudioStreamProvider != null);
+            mMuxerWrapper.setStateCallback(new MediaMuxerWrapper.StateCallback() {
+                @Override
+                public void onStart() {
+                    Log.e(TAG, "MediaMuxerWrapper.onStart");
+                }
+
+                @Override
+                public void onStop() {
+                    Log.e(TAG, "MediaMuxerWrapper.onStop");
+                }
+            });
         } catch (IOException e) {
             e.printStackTrace();
             return;
         }
 
-        for (MediaStreamProvider provider : mMediaStreamProviders) {
-            provider.setMuxerWrapper(mMuxerWrapper);
-            provider.setPtsCounter(mPtsCounter);
-            provider.prepare();
+        if (mScreenStreamProvider != null) {
+            mScreenStreamProvider.setMuxerWrapper(mMuxerWrapper);
+            mScreenStreamProvider.prepare();
+        }
+        if (mAgoraAudioStreamProvider != null) {
+            mAgoraAudioStreamProvider.setMuxerWrapper(mMuxerWrapper);
+            mAgoraAudioStreamProvider.setOnFirstAgoraAudioFrameListener(new AgoraAudioStreamProvider.OnFirstAgoraAudioFrameListener() {
+                @Override
+                public void onFirstAgoraAudioFrame() {
+                    if (mScreenStreamProvider != null) {
+                        mScreenStreamProvider.signalCreateVirtualDisplay();
+//                        mScreenStreamProvider.createVirtualDisplay();
+                    }
+                }
+            });
+            mAgoraAudioStreamProvider.prepare();
         }
     }
 
     public void stop() {
-        if (mState.get() == STATE_RECORDING) {
-            stopProviders();
-            signalEndOfStream();
+        if (isRecording()) {
+            if (mScreenStreamProvider != null) {
+                mScreenStreamProvider.stop();
+            }
+            if (mAgoraAudioStreamProvider != null) {
+                mAgoraAudioStreamProvider.stop();
+            }
+            mMuxerWrapper.writeEndOfStream();
+            mMuxerWrapper.stop();
         }
-        release();
+        mState.set(STATE_STOPPED);
     }
 
     public boolean isRecording() {
         return mState.get() == STATE_RECORDING;
-    }
-
-    private void stopProviders() {
-        for (MediaStreamProvider provider : mMediaStreamProviders) {
-            provider.stop();
-        }
-    }
-
-    private void signalEndOfStream() {
-        MediaCodec.BufferInfo eos = new MediaCodec.BufferInfo();
-        ByteBuffer buffer = ByteBuffer.allocate(0);
-        eos.set(0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
-        eos.presentationTimeUs = mPtsCounter.newPts();
-        for (MediaStreamProvider provider : mMediaStreamProviders) {
-            mMuxerWrapper.writeSampleData(
-                    provider.getMuxerTrackIndex(), buffer, eos);
-        }
-    }
-
-    private void release() {
-        for (MediaStreamProvider provider : mMediaStreamProviders) {
-            provider.release();
-        }
-        mMediaStreamProviders.clear();
-
-        if (mState.get() == STATE_RECORDING) {
-            mState.set(STATE_STOPPED);
-            if (mMuxerWrapper != null) {
-                mMuxerWrapper.stop();
-                mMuxerWrapper = null;
-            }
-        }
     }
 
     public static void requestRecordScreen(Activity activity, int requestCode) {

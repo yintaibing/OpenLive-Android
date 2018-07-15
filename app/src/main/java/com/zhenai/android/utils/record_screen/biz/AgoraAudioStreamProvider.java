@@ -27,7 +27,6 @@ public class AgoraAudioStreamProvider extends MediaStreamProvider implements
 
     @Override
     protected void onCodecCreated(MediaCodec mediaCodec) {
-
     }
 
     @Override
@@ -46,9 +45,10 @@ public class AgoraAudioStreamProvider extends MediaStreamProvider implements
     }
 
     @Override
-    public void stop() {
-        super.stop();
+    public void stopInternal() {
+        super.stopInternal();
         listenAgora(false);
+        mOnFirstAgoraAudioFrameListener = null;
     }
 
     @Override
@@ -68,6 +68,23 @@ public class AgoraAudioStreamProvider extends MediaStreamProvider implements
 
     @Override
     public void onMixedAudioFrame(byte[] data, int videoType, int samples, int bytesPerSample, int channels, int samplesPerSec, long renderTimeMs, int bufferLength) {
-        mux(data, bufferLength);
+        if (mFirstAudioFrame) {
+            mFirstAudioFrame = false;
+            if (mOnFirstAgoraAudioFrameListener != null) {
+                mOnFirstAgoraAudioFrameListener.onFirstAgoraAudioFrame();
+            }
+        }
+        mux(data, bufferLength, 0L, false, true);
+    }
+
+    private boolean mFirstAudioFrame = true;
+    private OnFirstAgoraAudioFrameListener mOnFirstAgoraAudioFrameListener;
+
+    public void setOnFirstAgoraAudioFrameListener(OnFirstAgoraAudioFrameListener l) {
+        this.mOnFirstAgoraAudioFrameListener = l;
+    }
+
+    public interface OnFirstAgoraAudioFrameListener {
+        void onFirstAgoraAudioFrame();
     }
 }

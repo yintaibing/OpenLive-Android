@@ -35,6 +35,11 @@ public class AgoraRawDataSimplePlugin implements MediaPreProcessing.ProgressCall
         synchronized (this) {
             if (!mInited) {
                 mInited = true;
+
+                if (mBufferAudioMix == null) {
+                    mBufferAudioMix = ByteBuffer.allocateDirect(2048);
+                    MediaPreProcessing.setAudioMixByteBUffer(mBufferAudioMix);
+                }
                 MediaPreProcessing.setCallback(this);
             }
         }
@@ -54,11 +59,6 @@ public class AgoraRawDataSimplePlugin implements MediaPreProcessing.ProgressCall
     }
 
     public void addAudioObserver(MediaDataAudioObserver observer) {
-        if (mBufferAudioMix == null) {
-            mBufferAudioMix = ByteBuffer.allocateDirect(2048);
-            MediaPreProcessing.setAudioMixByteBUffer(mBufferAudioMix);
-        }
-
         mAudioObservers.add(observer);
     }
 

@@ -32,6 +32,7 @@ import io.agora.openlive.model.ConstantApp;
 import io.agora.openlive.model.VideoStatusData;
 import io.agora.rtc.Constants;
 import io.agora.rtc.RtcEngine;
+import io.agora.rtc.plugin.rawdata.AgoraRawDataSimplePlugin;
 import io.agora.rtc.plugin.rawdata.MediaDataAudioObserver;
 import io.agora.rtc.plugin.rawdata.MediaDataObserverPlugin;
 import io.agora.rtc.plugin.rawdata.MediaPreProcessing;
@@ -133,6 +134,7 @@ public class LiveRoomActivity extends BaseActivity implements AGEventHandler {
         mRecordScreenManager = new RecordScreenManager(recordScreenLayout);
 
 //        addMediaPreProcessing();
+        AgoraRawDataSimplePlugin.getInstance().init();
     }
 
     private void addMediaPreProcessing() {
@@ -170,17 +172,17 @@ public class LiveRoomActivity extends BaseActivity implements AGEventHandler {
     @Override
     protected void onPause() {
         super.onPause();
-        if (mRecordScreenManager != null) {
-            mRecordScreenManager.onActivityPause(this);
-        }
+//        if (mRecordScreenManager != null) {
+//            mRecordScreenManager.onActivityPause(this);
+//        }
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        if (mRecordScreenManager != null) {
-            mRecordScreenManager.onActivityResume(this);
-        }
+//        if (mRecordScreenManager != null) {
+//            mRecordScreenManager.onActivityResume(this);
+//        }
     }
 
     @Override
