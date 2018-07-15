@@ -351,7 +351,7 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
         mSurfaceTexture.updateTexImage();
 
         current_time = System.currentTimeMillis();
-        if (current_time - time >= video_interval/2) {
+        if (current_time - time >= video_interval) {
             drawImage();
             setPresentationTime(customPts >= 0L ? customPts : computePresentationTimeNsec(count++));
             swapBuffers();

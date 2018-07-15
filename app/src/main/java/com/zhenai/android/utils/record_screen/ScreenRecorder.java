@@ -25,6 +25,7 @@ public class ScreenRecorder {
     private ScreenStreamProvider mScreenStreamProvider;
     private AgoraAudioStreamProvider mAgoraAudioStreamProvider;
     private AtomicInteger mState = new AtomicInteger(STATE_DEFAULT);
+    private PresentationTimeCounter mPtsCounter;
 
     public ScreenRecorder(File outputFile) {
         mOutputFile = outputFile;
@@ -67,6 +68,7 @@ public class ScreenRecorder {
                     Log.e(TAG, "MediaMuxerWrapper.onStop");
                 }
             });
+            mPtsCounter = new PresentationTimeCounter(0);
         } catch (IOException e) {
             e.printStackTrace();
             return;
@@ -74,10 +76,12 @@ public class ScreenRecorder {
 
         if (mScreenStreamProvider != null) {
             mScreenStreamProvider.setMuxerWrapper(mMuxerWrapper);
+            mScreenStreamProvider.setPtsCounter(mPtsCounter);
             mScreenStreamProvider.prepare();
         }
         if (mAgoraAudioStreamProvider != null) {
             mAgoraAudioStreamProvider.setMuxerWrapper(mMuxerWrapper);
+            mAgoraAudioStreamProvider.setPtsCounter(mPtsCounter);
             mAgoraAudioStreamProvider.setOnFirstAgoraAudioFrameListener(new AgoraAudioStreamProvider.OnFirstAgoraAudioFrameListener() {
                 @Override
                 public void onFirstAgoraAudioFrame() {

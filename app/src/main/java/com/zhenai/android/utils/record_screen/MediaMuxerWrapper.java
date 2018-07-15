@@ -90,9 +90,9 @@ private File file;
             }
 
             if (isVideo) {
-                mPrevVideoPts = Math.max(mPrevVideoPts, bufferInfo.presentationTimeUs);
+                mPrevVideoPts = bufferInfo.presentationTimeUs;
             } else {
-                mPrevAudioPts = Math.max(mPrevAudioPts, bufferInfo.presentationTimeUs);
+                mPrevAudioPts = bufferInfo.presentationTimeUs;
             }
 
             doWriteSampleData(track, byteBuffer, bufferInfo);
@@ -109,9 +109,9 @@ private File file;
             }
 
             if (isVideo) {
-                mPrevVideoPts = Math.max(mPrevVideoPts, tempBufferInfo.presentationTimeUs);
+                mPrevVideoPts = tempBufferInfo.presentationTimeUs;
             } else {
-                mPrevAudioPts = Math.max(mPrevAudioPts, tempBufferInfo.presentationTimeUs);
+                mPrevAudioPts = tempBufferInfo.presentationTimeUs;
             }
 
             cache(track, tempByteBuffer, tempBufferInfo);
@@ -140,7 +140,8 @@ private File file;
             if (track >= 0 && byteBuffer != null) {
                 Log.e(TAG, "write track=" + track +
                         " pts=" + bufferInfo.presentationTimeUs +
-                        " flags=" + bufferInfo.flags);
+                        " flags=" + bufferInfo.flags +
+                        " size=" + bufferInfo.size);
                 byteBuffer.position(bufferInfo.offset)
                         .limit(bufferInfo.size + bufferInfo.offset);
                 mMuxer.writeSampleData(track, byteBuffer, bufferInfo);
@@ -195,22 +196,32 @@ private File file;
     }
 
     private long newPresentationTime(boolean isVideo) {
-//        if (mCommonPtsCounter == null) {
-//            mCommonPtsCounter = new PresentationTimeCounter(0);
-//        }
-//        return mCommonPtsCounter.newPresentationTimeUs();
-
-        if (isVideo) {
-            if (mVideoPtsCounter == null) {
-                mVideoPtsCounter = new PresentationTimeCounter(0);
-            }
-            return mVideoPtsCounter.newPresentationTimeUs();
-        } else {
-            if (mAudioPtsCounter == null) {
-                mAudioPtsCounter = new PresentationTimeCounter(0);
-            }
-            return mAudioPtsCounter.newPresentationTimeUs();
+        if (mCommonPtsCounter == null) {
+            mCommonPtsCounter = new PresentationTimeCounter(0);
         }
+        return isVideo ? mCommonPtsCounter.newVideoPts() : mCommonPtsCounter.newAudioPts();
+
+//        if (isVideo) {
+//            if (mVideoPtsCounter == null) {
+//                mVideoPtsCounter = new PresentationTimeCounter(mPrevAudioPts);
+//            }
+//            return mVideoPtsCounter.newPresentationTimeUs();
+//            return computePresentationTimeNsec();
+//        } else {
+//            if (mAudioPtsCounter == null) {
+//                mAudioPtsCounter = new PresentationTimeCounter(mPrevVideoPts);
+//            }
+//            return mAudioPtsCounter.newPresentationTimeUs();
+//            return mPrevAudioPts + 24000;
+//        }
+    }
+
+    private int frameCount;
+    private long computePresentationTimeNsec() {
+        final long ONE_BILLION = 1000000;//1000000000
+        long pts = frameCount * ONE_BILLION / 15;
+        frameCount++;
+        return pts;
     }
 
     public void stop() {

@@ -56,7 +56,7 @@ public class ScreenStreamProvider extends MediaStreamProvider {
 
                     case MSG_RENDER:// update texture and draw
                         if (!mQuit.get()) {
-                            mEGLRender.updateTexAndDraw(-1L);
+                            mEGLRender.updateTexAndDraw(0L);
                         }
                         break;
                 }
@@ -79,7 +79,7 @@ public class ScreenStreamProvider extends MediaStreamProvider {
 
             @Override
             public void onOutputBufferAvailable(@NonNull MediaCodec codec, int index, @NonNull MediaCodec.BufferInfo info) {
-                mux(index, info, true, false);
+                mux(index, info, true, true);
             }
 
             @Override
