@@ -56,7 +56,7 @@ public class ScreenStreamProvider extends MediaStreamProvider {
 
                     case MSG_RENDER:// update texture and draw
                         if (!mQuit.get()) {
-                            mEGLRender.updateTexAndDraw(0L);
+                            mEGLRender.updateTexAndDraw(null);
                         }
                         break;
                 }

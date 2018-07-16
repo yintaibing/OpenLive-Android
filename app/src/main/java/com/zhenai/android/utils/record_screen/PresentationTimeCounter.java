@@ -29,7 +29,7 @@ public class PresentationTimeCounter {
         return mPrevPts = result;
     }
 
-    public synchronized long newVideoPts() {
+    public long newVideoPts() {
         if (mPrevVideoPts == 0L) {
             mPrevVideoPts = 66666;
             return 0L;
@@ -45,14 +45,26 @@ public class PresentationTimeCounter {
         } else {
             r = mPrevVideoPts + 66666;
         }
-        return mPrevVideoPts = r;
+        return mPrevVideoPts = compareAndReset(mPrevVideoPts, mPrevAudioPts, 66666);
     }
 
-    public synchronized long newAudioPts() {
+    public long newAudioPts() {
         if (mPrevAudioPts == 0L) {
             mPrevAudioPts = 24000;
             return 0L;
         }
         return mPrevAudioPts += 24000;
+    }
+
+    private synchronized long compareAndReset(long me, long target, long standard) {
+        if (me < target) {
+            if (target - me < standard) {
+                return me + standard;
+            } else {
+                return target;
+            }
+        } else {
+            return me + standard;
+        }
     }
 }

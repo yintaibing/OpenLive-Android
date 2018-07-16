@@ -16,6 +16,8 @@ import android.os.Message;
 import android.util.Log;
 import android.view.Surface;
 
+import com.zhenai.android.utils.record_screen.PresentationTimeCounter;
+
 import java.nio.IntBuffer;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -342,7 +344,7 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
         }
     }
 
-    public void updateTexAndDraw(long customPts) {
+    public void updateTexAndDraw(PresentationTimeCounter ptsCounter) {
         makeCurrent(1);
         GLES20.glEnable(GLES20.GL_BLEND); //打开混合功能
         GLES20.glBlendFunc(GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA); //指定混合模式
@@ -353,7 +355,8 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
         current_time = System.currentTimeMillis();
         if (current_time - time >= video_interval) {
             drawImage();
-            setPresentationTime(customPts >= 0L ? customPts : computePresentationTimeNsec(count++));
+            setPresentationTime(ptsCounter != null ? ptsCounter.newVideoPts() :
+                    computePresentationTimeNsec(count++));
             swapBuffers();
             time = current_time;
         }

@@ -18,7 +18,7 @@ public abstract class MediaStreamProvider {
     private MediaEncodeConfig mConfig;
     private MediaCodec mMediaCodec;
     private MediaMuxerWrapper mMuxerWrapper;
-    private PresentationTimeCounter mPtsCounter;
+    protected PresentationTimeCounter mPtsCounter;
 
     protected AtomicBoolean mQuit = new AtomicBoolean(false);
     protected volatile int mMuxerTrackIndex = -1;
