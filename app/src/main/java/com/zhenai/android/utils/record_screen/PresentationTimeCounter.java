@@ -29,34 +29,36 @@ public class PresentationTimeCounter {
         return mPrevPts = result;
     }
 
-    public long newVideoPts() {
+    public synchronized long newVideoPts() {
         if (mPrevVideoPts == 0L) {
             mPrevVideoPts = 66666;
             return 0L;
         }
 
-        long r;
-        if (mPrevVideoPts < mPrevAudioPts) {
-            if (mPrevAudioPts - mPrevVideoPts < 66666) {
-                r = mPrevVideoPts + 66666;
-            } else {
-                r = mPrevAudioPts;
-            }
-        } else {
-            r = mPrevVideoPts + 66666;
-        }
-        return mPrevVideoPts = compareAndReset(mPrevVideoPts, mPrevAudioPts, 66666);
+        return mPrevVideoPts += 66666;
+
+//        long r;
+//        if (mPrevVideoPts < mPrevAudioPts) {
+//            if (mPrevAudioPts - mPrevVideoPts < 66666) {
+//                r = mPrevVideoPts + 66666;
+//            } else {
+//                r = mPrevAudioPts;
+//            }
+//        } else {
+//            r = mPrevVideoPts + 66666;
+//        }
+//        return mPrevVideoPts = compareAndReset(mPrevVideoPts, mPrevAudioPts, 66666);
     }
 
-    public long newAudioPts() {
+    public synchronized long newAudioPts() {
         if (mPrevAudioPts == 0L) {
             mPrevAudioPts = 24000;
             return 0L;
         }
-        return mPrevAudioPts += 24000;
+        return mPrevAudioPts = compareAndReset(mPrevAudioPts, mPrevVideoPts, 24000);
     }
 
-    private synchronized long compareAndReset(long me, long target, long standard) {
+    private long compareAndReset(long me, long target, long standard) {
         if (me < target) {
             if (target - me < standard) {
                 return me + standard;

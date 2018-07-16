@@ -74,7 +74,8 @@ public class AgoraAudioStreamProvider extends MediaStreamProvider implements
                 mOnFirstAgoraAudioFrameListener.onFirstAgoraAudioFrame();
             }
         }
-        mux(data, bufferLength, mPtsCounter.newAudioPts(), false, true);
+        mux(data, bufferLength, mPtsCounter.newAudioPts(),
+                false, true);
     }
 
     private boolean mFirstAudioFrame = true;
