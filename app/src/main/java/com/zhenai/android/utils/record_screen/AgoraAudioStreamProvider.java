@@ -1,10 +1,7 @@
-package com.zhenai.android.utils.record_screen.biz;
+package com.zhenai.android.utils.record_screen;
 
 import android.media.MediaCodec;
 import android.support.annotation.NonNull;
-
-import com.zhenai.android.utils.record_screen.MediaEncodeConfig;
-import com.zhenai.android.utils.record_screen.MediaStreamProvider;
 
 import io.agora.rtc.plugin.rawdata.AgoraRawDataSimplePlugin;
 import io.agora.rtc.plugin.rawdata.MediaDataAudioObserver;
@@ -27,6 +24,7 @@ public class AgoraAudioStreamProvider extends MediaStreamProvider implements
 
     @Override
     protected void onCodecCreated(MediaCodec mediaCodec) {
+
     }
 
     @Override
@@ -46,14 +44,13 @@ public class AgoraAudioStreamProvider extends MediaStreamProvider implements
 
     @Override
     public void stopInternal() {
-        super.stopInternal();
         listenAgora(false);
-        mOnFirstAgoraAudioFrameListener = null;
+        super.stopInternal();
     }
 
     @Override
     public void onRecordAudioFrame(byte[] data, int videoType, int samples, int bytesPerSample, int channels, int samplesPerSec, long renderTimeMs, int bufferLength) {
-//        mux(data, bufferLength);
+
     }
 
     @Override
@@ -74,7 +71,7 @@ public class AgoraAudioStreamProvider extends MediaStreamProvider implements
                 mOnFirstAgoraAudioFrameListener.onFirstAgoraAudioFrame();
             }
         }
-        mux(data, bufferLength, mPtsCounter.newAudioPts(),
+        mux(data, bufferLength, 0L,
                 false, true);
     }
 

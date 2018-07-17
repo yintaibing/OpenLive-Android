@@ -15,7 +15,7 @@ import android.support.annotation.NonNull;
 import android.util.Log;
 import android.view.Surface;
 
-import com.zhenai.android.utils.record_screen.copy.EGLRender;
+import com.zhenai.android.utils.record_screen.gl.EGLRender;
 
 @TargetApi(Build.VERSION_CODES.LOLLIPOP)
 public class ScreenStreamProvider extends MediaStreamProvider {
@@ -31,6 +31,8 @@ public class ScreenStreamProvider extends MediaStreamProvider {
     private Handler mHandler;
     private Surface mVirtualDisplayOutputSurface;
     private EGLRender mEGLRender;
+
+    private boolean mWaitReceiveScreenStream;
 
     public ScreenStreamProvider(@NonNull MediaProjection mediaProjection,
                                 @NonNull VideoEncodeConfig config) {
@@ -56,7 +58,7 @@ public class ScreenStreamProvider extends MediaStreamProvider {
 
                     case MSG_RENDER:// update texture and draw
                         if (!mQuit.get()) {
-                            mEGLRender.updateTexAndDraw(null);
+                            mEGLRender.updateTexAndDraw();
                         }
                         break;
                 }
@@ -104,25 +106,37 @@ public class ScreenStreamProvider extends MediaStreamProvider {
     protected void onCodecStarted(MediaCodec mediaCodec) {
         final VideoEncodeConfig config = (VideoEncodeConfig) getConfig();
 
-        mEGLRender = new EGLRender(mCodecSurface, config.width, config.height, config.framerate,
-                config.mCropRegion);
-        mEGLRender.mSurfaceTexture.setOnFrameAvailableListener(new SurfaceTexture.OnFrameAvailableListener() {
+        mEGLRender = new EGLRender(mCodecSurface, config.width, config.height, config.framerate);
+        mEGLRender.setupRenders(config.mCropRegion, config.mWaterMark,
+                config.mWaterMarkX, config.mWaterMarkY);
+        mEGLRender.setSurfaceTextureListener(new SurfaceTexture.OnFrameAvailableListener() {
             @Override
             public void onFrameAvailable(SurfaceTexture surfaceTexture) {
-                mHandler.obtainMessage(MSG_RENDER).sendToTarget();
+                if (mHandler != null) {
+                    mHandler.obtainMessage(MSG_RENDER).sendToTarget();
+                }
             }
         });
 
         mVirtualDisplayOutputSurface = mEGLRender.getDecodeSurface();
 
-//        createVirtualDisplay();
+//        createVirtualDisplay();// 等待声网调signalCreateVirtualDisplay
+        if (!mWaitReceiveScreenStream) {
+            createVirtualDisplay();
+        }
     }
 
-    public void signalCreateVirtualDisplay() {
-        mHandler.obtainMessage(MSG_START_VIRTUAL_DISPLAY).sendToTarget();
+    public void waitReceiveScreenStream() {
+        mWaitReceiveScreenStream = true;
     }
 
-    public void createVirtualDisplay() {
+    public void signalReceiveScreenStream() {
+        if (mHandler != null) {
+            mHandler.obtainMessage(MSG_START_VIRTUAL_DISPLAY).sendToTarget();
+        }
+    }
+
+    private void createVirtualDisplay() {
         VideoEncodeConfig config = (VideoEncodeConfig) getConfig();
         mVirtualDisplay = mMediaProjection.createVirtualDisplay("ScreenStreamProvider",
                 config.width, config.height, config.dpi, DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC,
@@ -140,10 +154,14 @@ public class ScreenStreamProvider extends MediaStreamProvider {
             mMediaProjection.stop();
             mMediaProjection = null;
         }
-        super.stopInternal();
+        if (mHandlerThread != null) {
+            mHandlerThread.getLooper().quitSafely();
+            mHandlerThread = null;
+            mHandler = null;
+        }
         if (mEGLRender != null) {
-            mEGLRender.mSurfaceTexture.release();
             mEGLRender.stop();
         }
+        super.stopInternal();
     }
 }

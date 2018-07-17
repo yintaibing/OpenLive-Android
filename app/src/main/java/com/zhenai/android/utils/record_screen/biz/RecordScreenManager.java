@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Rect;
 import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
@@ -20,12 +21,12 @@ import android.widget.Toast;
 import com.zhenai.android.utils.record_screen.AudioEncodeConfig;
 import com.zhenai.android.utils.record_screen.ScreenRecorder;
 import com.zhenai.android.utils.record_screen.VideoEncodeConfig;
-import com.zhenai.android.utils.record_screen.copy.MediaEncoder;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
+import io.agora.openlive.R;
 import io.agora.util.BitmapUtils;
 import io.agora.util.DensityUtils;
 import io.agora.util.FilePathUtils;
@@ -55,9 +56,6 @@ public class RecordScreenManager implements RecordScreenLayout.OnOperationListen
     private RecordScreenLayout mRecordLayout;
     private ProgressDialog mProgressDialog;
     private RecordScreenPreviewDialog mPreviewDialog;
-
-    private MediaEncoder mMediaEncoder;
-    private boolean mUseMediaEncoder = false;
 
     private ScreenRecorder mScreenRecorder;
     private String mOriginOutputFileName;
@@ -112,13 +110,6 @@ public class RecordScreenManager implements RecordScreenLayout.OnOperationListen
 //                mRecordLayout.setRecordParams(mMinRecordSec, mMaxRecordSec);
                 mRecordLayout.notifyRecordStarted();
 
-                if (mUseMediaEncoder) {
-                    mMediaEncoder = new MediaEncoder(projection, width, height, 1);
-                    mMediaEncoder.start();
-                    return;
-                }
-
-
                 mOriginVideoConfig = new VideoEncodeConfig(
                         width,
                         height,
@@ -130,12 +121,31 @@ public class RecordScreenManager implements RecordScreenLayout.OnOperationListen
                         //"OMX.MTK.VIDEO.ENCODER.AVC",
                         "OMX.google.h264.encoder",
                         null);
+                int cropRectTop = (int) Math.ceil(DensityUtils.getStatusBarHeight(activity) * mScaleFactor);
+                int cropRectBottom = (int) Math.ceil((dm.heightPixels
+                        - DensityUtils.getDaoHangHeight(activity))
+                        * mScaleFactor);
                 mOriginVideoConfig.setCropRegion(new Rect(
                         0,
                         (int) (DensityUtils.getStatusBarHeight(activity) * mScaleFactor),
                         width,
                         (int) ((dm.heightPixels - DensityUtils.getDaoHangHeight(activity)) * mScaleFactor)
                 ));
+                // 不能是奇数
+                if ((cropRectBottom - cropRectTop) % 2 != 0) {
+                    cropRectBottom--;
+                }
+                mOriginVideoConfig.setCropRegion(new Rect(0, cropRectTop, width, cropRectBottom));
+                Bitmap waterMark = BitmapFactory.decodeResource(activity.getResources(),
+                        R.drawable.live_video_record_screen_water_mark);
+                waterMark = Bitmap.createScaledBitmap(waterMark,
+                        (int) (waterMark.getWidth() * mScaleFactor),
+                        (int) (waterMark.getHeight() * mScaleFactor),
+                        false);
+                mOriginVideoConfig.setWaterMark(waterMark,
+                        width - waterMark.getWidth() - (int) (DensityUtils.dp2px(activity, 10f) * mScaleFactor),
+                        /*height - cropRectBottom + */(int) (DensityUtils.dp2px(activity, 10f) * mScaleFactor));
+
                 AudioEncodeConfig audioEncodeConfig = new AudioEncodeConfig(
                         192000,
                         32000,
@@ -284,9 +294,6 @@ public class RecordScreenManager implements RecordScreenLayout.OnOperationListen
     }
 
     private boolean isRecording() {
-        if (mUseMediaEncoder){
-            return mMediaEncoder != null;
-        }
         return mScreenRecorder != null && mScreenRecorder.isRecording();
     }
 
@@ -295,9 +302,6 @@ public class RecordScreenManager implements RecordScreenLayout.OnOperationListen
     }
 
     private void stopRecorderAndLayout() {
-        if (mUseMediaEncoder && mMediaEncoder != null) {
-            mMediaEncoder.stopScreen();
-        }
         if (mScreenRecorder != null) {
             mScreenRecorder.stop();
             mScreenRecorder = null;

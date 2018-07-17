@@ -1,4 +1,4 @@
-package com.zhenai.android.utils.record_screen.copy;
+package com.zhenai.android.utils.record_screen.gl;
 
 import android.graphics.Bitmap;
 import android.graphics.Rect;
@@ -10,31 +10,17 @@ import android.opengl.EGLDisplay;
 import android.opengl.EGLExt;
 import android.opengl.EGLSurface;
 import android.opengl.GLES20;
-import android.os.Handler;
-import android.os.Looper;
-import android.os.Message;
-import android.util.Log;
 import android.view.Surface;
-
-import com.zhenai.android.utils.record_screen.PresentationTimeCounter;
-
-import java.nio.IntBuffer;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 
 /**
  * Created by zx315476228 on 17-3-3.
  */
 
-public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
-    private final int HANDLER_PHOTO_CALLBACK = 0;
-    private static final String TAG = "EncodeDecodeSurface";
-    private static final boolean VERBOSE = false;           // lots of logging
-
+public class EGLRender {
     private STextureRender mTextureRender;
     private WaterMarkRender mWaterMarkRender;
-    public SurfaceTexture mSurfaceTexture;
+    private SurfaceTexture mSurfaceTexture;
 
     private EGLDisplay mEGLDisplay = EGL14.EGL_NO_DISPLAY;
     private EGLContext mEGLContext = EGL14.EGL_NO_CONTEXT;
@@ -48,76 +34,15 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
     private int mHeight;
     private int fps;
     private int video_interval;
-    private boolean mFrameAvailable = true;
-    private onFrameCallBack callBack;
-    private boolean hasCutScreen = false;
-
-    private boolean start;
     private long time = 0;
     private long current_time;
 
-    private Handler handler = new Handler(Looper.getMainLooper()) {
-        @Override
-        public void handleMessage(Message msg) {
-            super.handleMessage(msg);
-            switch (msg.what) {
-                case HANDLER_PHOTO_CALLBACK:
-                    if (callBack != null && msg.obj != null)
-                        callBack.onCutScreen((Bitmap) msg.obj);
-                    break;
-            }
-        }
-    };
-    private ExecutorService singleThreadExecutor = Executors.newSingleThreadExecutor();
-
-    private class CutScreeenThread implements Runnable {
-        private int[] modelData;
-
-        public CutScreeenThread(int[] modelData) {
-            this.modelData = modelData;
-        }
-
-        @Override
-        public void run() {
-
-            int[] ArData = new int[modelData.length];
-            int offset1, offset2;
-            for (int i = 0; i < mHeight; i++) {
-                offset1 = i * mWidth;
-                offset2 = (mHeight - i - 1) * mWidth;
-                for (int j = 0; j < mWidth; j++) {
-                    int texturePixel = modelData[offset1 + j];
-                    int blue = (texturePixel >> 16) & 0xff;
-                    int red = (texturePixel << 16) & 0x00ff0000;
-                    int pixel = (texturePixel & 0xff00ff00) | red | blue;
-                    ArData[offset2 + j] = pixel;
-                }
-            }
-            Bitmap bitmap = Bitmap.createBitmap(ArData, mWidth, mHeight, Bitmap.Config.ARGB_8888);
-            modelData = null;
-            ArData = null;
-
-            handler.obtainMessage(HANDLER_PHOTO_CALLBACK, bitmap).sendToTarget();
-        }
-    }
-    public void setCallBack(onFrameCallBack callBack) {
-        this.callBack = callBack;
-    }
-
-    public interface onFrameCallBack {
-        void onUpdate();
-        void onCutScreen(Bitmap bitmap);
-    }
-
-
-    public EGLRender(Surface surface, int mWidth, int mHeight, int fps,
-                     Rect rect) {
+    public EGLRender(Surface surface, int mWidth, int mHeight, int fps) {
         this.mWidth = mWidth;
         this.mHeight = mHeight;
         initFPs(fps);
         eglSetup(surface);
-        makeCurrent();
-        setup(rect);
+        makeCurrent(0);
     }
 
     private void initFPs(int fps) {
@@ -204,34 +129,25 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
     }
 
     /**
-     * Makes our EGL context and surface current.
-     */
-    public void makeCurrent() {
-        if (!EGL14.eglMakeCurrent(mEGLDisplay, mEGLSurface, mEGLSurface, mEGLContext)) {
-            throw new RuntimeException("eglMakeCurrent failed");
-        }
-    }
-
-    /**
      * Creates interconnected instances of TextureRender, SurfaceTexture, and Surface.
      */
-    private void setup(Rect rect) {
-        mTextureRender = new STextureRender(mWidth, mHeight, rect);
-        mTextureRender.surfaceCreated();
+    public void setupRenders(Rect cropRect, Bitmap waterMark, int waterMarkX, int waterMarkY) {
+        mTextureRender = new STextureRender(mWidth, mHeight, cropRect);
 
-        if (VERBOSE) Log.d(TAG, "textureID=" + mTextureRender.getTextureId());
-        mSurfaceTexture = new SurfaceTexture(mTextureRender.getTextureId());
+        mSurfaceTexture = new SurfaceTexture(mTextureRender.getTextureID());
         mSurfaceTexture.setDefaultBufferSize(mWidth, mHeight);
-        mSurfaceTexture.setOnFrameAvailableListener(this);
+//        mSurfaceTexture.setOnFrameAvailableListener(this);
         decodeSurface = new Surface(mSurfaceTexture);
 
-
-        mWaterMarkRender = new WaterMarkRender();
-        mWaterMarkRender.surfaceCreated();
+        mWaterMarkRender = new WaterMarkRender(mWidth, mHeight, waterMark, waterMarkX, waterMarkY);
     }
 
     public Surface getDecodeSurface() {
         return decodeSurface;
+    }
+
+    public void setSurfaceTextureListener(SurfaceTexture.OnFrameAvailableListener l) {
+        mSurfaceTexture.setOnFrameAvailableListener(l);
     }
 
     private EGLConfig getConfig(int version) {
@@ -256,7 +172,6 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
         int[] numConfigs = new int[1];
         if (!EGL14.eglChooseConfig(mEGLDisplay, attribList, 0, configs, 0, configs.length,
                 numConfigs, 0)) {
-            Log.w(TAG, "unable to find RGB8888 / " + version + " EGLConfig");
             return null;
         }
         return configs[0];
@@ -270,7 +185,6 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
     }
 
     public void makeCurrent(int index) {
-
         if (index == 0) {
             if (!EGL14.eglMakeCurrent(mEGLDisplay, mEGLSurface, mEGLSurface, mEGLContext)) {
                 throw new RuntimeException("eglMakeCurrent failed");
@@ -288,28 +202,15 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
         checkEglError("eglPresentationTimeANDROID");
     }
 
-    public void awaitNewImage() {
-        if (mFrameAvailable) {
-            mFrameAvailable = false;
-            mSurfaceTexture.updateTexImage();
-        }
-    }
-
-    public boolean swapBuffers() {
-        boolean result = EGL14.eglSwapBuffers(mEGLDisplay, mEGLSurfaceEncoder);
+    public void swapBuffers() {
+        EGL14.eglSwapBuffers(mEGLDisplay, mEGLSurfaceEncoder);
         checkEglError("eglSwapBuffers");
-        return result;
     }
 
-    private int count = 1;
-
-    @Override
-    public void onFrameAvailable(SurfaceTexture surfaceTexture) {
-        mFrameAvailable = true;
-    }
+    private int frame_count = 1;
 
     private long computePresentationTimeNsec(int frameIndex) {
-        final long ONE_BILLION = 1000000000;
+        long ONE_BILLION = 1000000000;
         return frameIndex * ONE_BILLION / fps;
     }
 
@@ -318,33 +219,7 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
         mWaterMarkRender.drawFrame();
     }
 
-    /**
-     * 开始录屏
-     */
-    public void start() {
-        start = true;
-        while (start) {
-            makeCurrent(1);
-            awaitNewImage();
-            current_time = System.currentTimeMillis();
-            if (current_time - time >= video_interval) {
-                //todo 帧率控制
-                drawImage();
-                if (callBack!= null) {
-                    callBack.onUpdate();
-                }
-                setPresentationTime(computePresentationTimeNsec(count++));
-                swapBuffers();
-                if (hasCutScreen) {
-                    getScreen();
-                    hasCutScreen = false;
-                }
-                time = current_time;
-            }
-        }
-    }
-
-    public void updateTexAndDraw(PresentationTimeCounter ptsCounter) {
+    public void updateTexAndDraw() {
         makeCurrent(1);
         GLES20.glEnable(GLES20.GL_BLEND); //打开混合功能
         GLES20.glBlendFunc(GLES20.GL_ONE, GLES20.GL_ONE_MINUS_SRC_ALPHA); //指定混合模式
@@ -354,31 +229,42 @@ public class EGLRender implements SurfaceTexture.OnFrameAvailableListener {
 
         current_time = System.currentTimeMillis();
         long interval = current_time - time;
-        if (interval >= video_interval
-                || Math.abs(interval - video_interval) <= video_interval / fps) {
+        if (interval >= video_interval) {
             drawImage();
-            setPresentationTime(ptsCounter != null ? ptsCounter.newVideoPts() :
-                    computePresentationTimeNsec(count++));
+//            setPresentationTime(computePresentationTimeNsec(frame_count++));
+            setPresentationTime(0L);
             swapBuffers();
             time = current_time;
         }
     }
 
-    /**
-     * 获取当前屏幕信息
-     */
-    private void getScreen() {
-        IntBuffer buffer = IntBuffer.allocate(mWidth * mHeight);
-        buffer.position(0);
-        GLES20.glReadPixels(0, 0, mWidth, mHeight, GLES20.GL_RGBA, GLES20.GL_UNSIGNED_BYTE, buffer);
-        int[] modelData = buffer.array();
-        buffer.clear();
-        singleThreadExecutor.execute(new CutScreeenThread(modelData));
-    }
-    public void cutScreen(){
-        hasCutScreen=true;
-    }
     public void stop() {
-        start = false;
+        if (mTextureRender != null) {
+            mTextureRender.destroy();
+            mTextureRender = null;
+        }
+        if (mWaterMarkRender != null) {
+            mWaterMarkRender.destroy();
+            mWaterMarkRender = null;
+        }
+
+        if (decodeSurface != null) {
+            decodeSurface.release();
+        }
+        if (mSurfaceTexture != null) {
+            mSurfaceTexture.release();
+        }
+
+        EGL14.eglDestroySurface(mEGLDisplay, mEGLSurface);
+        mEGLSurface = EGL14.EGL_NO_SURFACE;
+        EGL14.eglDestroyContext(mEGLDisplay, mEGLContext);
+        mEGLContext = EGL14.EGL_NO_CONTEXT;
+
+        EGL14.eglDestroySurface(mEGLDisplay, mEGLSurfaceEncoder);
+        mEGLSurfaceEncoder = EGL14.EGL_NO_SURFACE;
+        EGL14.eglDestroyContext(mEGLDisplay, mEGLContextEncoder);
+        mEGLContextEncoder = EGL14.EGL_NO_CONTEXT;
+
+        mEGLDisplay = EGL14.EGL_NO_DISPLAY;
     }
 }

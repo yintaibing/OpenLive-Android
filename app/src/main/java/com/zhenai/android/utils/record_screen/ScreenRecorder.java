@@ -8,8 +8,6 @@ import android.media.projection.MediaProjectionManager;
 import android.os.Build;
 import android.util.Log;
 
-import com.zhenai.android.utils.record_screen.biz.AgoraAudioStreamProvider;
-
 import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -25,7 +23,6 @@ public class ScreenRecorder {
     private ScreenStreamProvider mScreenStreamProvider;
     private AgoraAudioStreamProvider mAgoraAudioStreamProvider;
     private AtomicInteger mState = new AtomicInteger(STATE_DEFAULT);
-    private PresentationTimeCounter mPtsCounter;
 
     public ScreenRecorder(File outputFile) {
         mOutputFile = outputFile;
@@ -54,9 +51,11 @@ public class ScreenRecorder {
         mState.set(STATE_RECORDING);
 
         try {
-            mMuxerWrapper = new MediaMuxerWrapper(mOutputFile,
-                    mScreenStreamProvider != null,
-                    mAgoraAudioStreamProvider != null);
+            VideoEncodeConfig videoConfig = mScreenStreamProvider != null ?
+                    (VideoEncodeConfig) mScreenStreamProvider.getConfig() : null;
+            AudioEncodeConfig audioConfig = mAgoraAudioStreamProvider != null ?
+                    (AudioEncodeConfig) mAgoraAudioStreamProvider.getConfig() : null;
+            mMuxerWrapper = new MediaMuxerWrapper(mOutputFile, videoConfig, audioConfig);
             mMuxerWrapper.setStateCallback(new MediaMuxerWrapper.StateCallback() {
                 @Override
                 public void onStart() {
@@ -68,7 +67,6 @@ public class ScreenRecorder {
                     Log.e(TAG, "MediaMuxerWrapper.onStop");
                 }
             });
-            mPtsCounter = new PresentationTimeCounter(0);
         } catch (IOException e) {
             e.printStackTrace();
             return;
@@ -76,18 +74,19 @@ public class ScreenRecorder {
 
         if (mScreenStreamProvider != null) {
             mScreenStreamProvider.setMuxerWrapper(mMuxerWrapper);
-            mScreenStreamProvider.setPtsCounter(mPtsCounter);
+            if (mAgoraAudioStreamProvider != null) {
+                // 有声网的流，让mScreenStreamProvider等待声网回调再开始接收屏幕视频流
+                mScreenStreamProvider.waitReceiveScreenStream();
+            }
             mScreenStreamProvider.prepare();
         }
         if (mAgoraAudioStreamProvider != null) {
             mAgoraAudioStreamProvider.setMuxerWrapper(mMuxerWrapper);
-            mAgoraAudioStreamProvider.setPtsCounter(mPtsCounter);
             mAgoraAudioStreamProvider.setOnFirstAgoraAudioFrameListener(new AgoraAudioStreamProvider.OnFirstAgoraAudioFrameListener() {
                 @Override
                 public void onFirstAgoraAudioFrame() {
                     if (mScreenStreamProvider != null) {
-                        mScreenStreamProvider.signalCreateVirtualDisplay();
-//                        mScreenStreamProvider.createVirtualDisplay();
+                        mScreenStreamProvider.signalReceiveScreenStream();
                     }
                 }
             });

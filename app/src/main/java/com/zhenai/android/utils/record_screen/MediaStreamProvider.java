@@ -18,7 +18,6 @@ public abstract class MediaStreamProvider {
     private MediaEncodeConfig mConfig;
     private MediaCodec mMediaCodec;
     private MediaMuxerWrapper mMuxerWrapper;
-    protected PresentationTimeCounter mPtsCounter;
 
     protected AtomicBoolean mQuit = new AtomicBoolean(false);
     protected volatile int mMuxerTrackIndex = -1;
@@ -29,10 +28,6 @@ public abstract class MediaStreamProvider {
 
     public void setMuxerWrapper(MediaMuxerWrapper muxerWrapper) {
         this.mMuxerWrapper = muxerWrapper;
-    }
-
-    public void setPtsCounter(PresentationTimeCounter mPtsCounter) {
-        this.mPtsCounter = mPtsCounter;
     }
 
     public void prepare() {
@@ -48,7 +43,7 @@ public abstract class MediaStreamProvider {
         mMediaCodec.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
         onCodecConfigured(mMediaCodec);
         mMediaCodec.start();
-        Log.e(TAG, "started media codec: " + mMediaCodec.getName());
+        Log.e(TAG, "started codec: " + mMediaCodec.getName());
         onCodecStarted(mMediaCodec);
     }
 
@@ -65,10 +60,6 @@ public abstract class MediaStreamProvider {
     protected abstract void onCodecConfigured(MediaCodec mediaCodec);
 
     protected abstract void onCodecStarted(MediaCodec mediaCodec);
-
-    protected long newPresentationTime() {
-        return mPtsCounter != null ? mPtsCounter.newPresentationTimeUs() : 0L;
-    }
 
     public MediaCodec getMediaCodec() {
         return mMediaCodec;
@@ -209,25 +200,25 @@ public abstract class MediaStreamProvider {
         }
     }
 
-    public void enqueue(byte[] byteBuffer, int length,
-                        long presentationTime) {
-        MediaCodec codec = mMediaCodec;
-        if (codec == null) {
-            return;
-        }
-
-        int inputIndex = codec.dequeueInputBuffer(-1);
-        if (inputIndex >= 0) {
-            ByteBuffer inputBuffer = codec.getInputBuffer(inputIndex);
-            if (inputBuffer != null) {
-                inputBuffer.clear();
-                inputBuffer.put(byteBuffer, 0, length);
-
-                codec.queueInputBuffer(inputIndex, 0, length, presentationTime,
-                        mQuit.get() || length <= 0 ? MediaCodec.BUFFER_FLAG_END_OF_STREAM : 0);
-            }
-        }
-    }
+//    public void enqueue(byte[] byteBuffer, int length,
+//                        long presentationTime) {
+//        MediaCodec codec = mMediaCodec;
+//        if (codec == null) {
+//            return;
+//        }
+//
+//        int inputIndex = codec.dequeueInputBuffer(-1);
+//        if (inputIndex >= 0) {
+//            ByteBuffer inputBuffer = codec.getInputBuffer(inputIndex);
+//            if (inputBuffer != null) {
+//                inputBuffer.clear();
+//                inputBuffer.put(byteBuffer, 0, length);
+//
+//                codec.queueInputBuffer(inputIndex, 0, length, presentationTime,
+//                        mQuit.get() || length <= 0 ? MediaCodec.BUFFER_FLAG_END_OF_STREAM : 0);
+//            }
+//        }
+//    }
 
     public void stop() {
         mQuit.set(true);
@@ -238,7 +229,8 @@ public abstract class MediaStreamProvider {
         if (codec != null) {
             try {
                 codec.stop();
-                Log.e(TAG, "stop codec");
+                codec.release();
+                Log.e(TAG, (isVideoStreamProvider() ? "video" : "audio") + " stopped codec");
             } catch (Exception e) {
                 e.printStackTrace();
             }

@@ -1,5 +1,6 @@
 package com.zhenai.android.utils.record_screen;
 
+import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.media.MediaCodecInfo;
 import android.media.MediaFormat;
@@ -14,6 +15,8 @@ public class VideoEncodeConfig extends MediaEncodeConfig {
     public MediaCodecInfo.CodecProfileLevel codecProfileLevel;
 
     public Rect mCropRegion;
+    public Bitmap mWaterMark;
+    public int mWaterMarkX, mWaterMarkY;
 
     public VideoEncodeConfig(int width, int height, int dpi, int bitrate, int framerate,
                              int iframeInterval, String mimeType, String codecName,
@@ -34,15 +37,16 @@ public class VideoEncodeConfig extends MediaEncodeConfig {
         this.mCropRegion = mCropRegion;
     }
 
+    public void setWaterMark(Bitmap bitmap, int mWaterMarkX, int mWaterMarkY) {
+        mWaterMark = bitmap;
+        this.mWaterMarkX = mWaterMarkX;
+        this.mWaterMarkY = mWaterMarkY;
+    }
+
     @Override
     public MediaFormat toMediaFormat() {
-        int outputHeight;
-        if (mCropRegion != null) {
-            outputHeight = Math.min(mCropRegion.height(), height);
-        } else {
-            outputHeight = height;
-        }
-        MediaFormat format = MediaFormat.createVideoFormat(mimeType, width, outputHeight);
+        MediaFormat format = MediaFormat.createVideoFormat(mimeType,
+                getOutputWidth(), getOutputHeight());
         format.setInteger(MediaFormat.KEY_COLOR_FORMAT,
                 MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
         format.setInteger(MediaFormat.KEY_BIT_RATE, bitrate);
@@ -56,5 +60,31 @@ public class VideoEncodeConfig extends MediaEncodeConfig {
         // maybe useful
         // format.setInteger(MediaFormat.KEY_REPEAT_PREVIOUS_FRAME_AFTER, 10_000_000);
         return format;
+    }
+
+    public int getOutputWidth() {
+        int outputWidth;
+        if (mCropRegion != null) {
+            outputWidth = Math.min(mCropRegion.width(), width);
+        } else {
+            outputWidth = width;
+        }
+        if (outputWidth % 2 != 0) {
+            outputWidth--;
+        }
+        return outputWidth;
+    }
+
+    public int getOutputHeight() {
+        int outputHeight;
+        if (mCropRegion != null) {
+            outputHeight = Math.min(mCropRegion.height(), height);
+        } else {
+            outputHeight = height;
+        }
+        if (outputHeight % 2 != 0) {
+            outputHeight--;
+        }
+        return outputHeight;
     }
 }

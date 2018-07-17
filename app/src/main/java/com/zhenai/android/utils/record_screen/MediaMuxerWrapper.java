@@ -17,28 +17,30 @@ import java.util.LinkedList;
 public class MediaMuxerWrapper {
     private static final String TAG = MediaMuxerWrapper.class.getSimpleName();
 
+    private File mOutputFile;
     private MediaMuxer mMuxer;
     private int mVideoTrack = -1, mAudioTrack = -1;
-    private long mPrevVideoPts, mPrevAudioPts;
     private int mRequiredTrackCount;
     private volatile int mAddedTrackCount;
     private volatile boolean mMuxerStarted;
 
-    private PresentationTimeCounter mCommonPtsCounter;
-    private PresentationTimeCounter mVideoPtsCounter;
-    private PresentationTimeCounter mAudioPtsCounter;
+    private SparseArray<MediaTrackPending> mPendings;
+    private PresentationTimeCounter mPtsCounter;
 
-    private SparseArray<MediaTrackPending> mPendings = new SparseArray<>(2);
-private File file;
-    public MediaMuxerWrapper(File outputFile, boolean hasVideo, boolean hasAudio) throws IOException {
-        file = outputFile;
+    public MediaMuxerWrapper(File outputFile,
+                             VideoEncodeConfig videoConfig,
+                             AudioEncodeConfig audioConfig) throws IOException {
+        mOutputFile = outputFile;
         mMuxer = new MediaMuxer(outputFile.getPath(), MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
-        if (hasVideo) {
+        if (videoConfig != null) {
             mRequiredTrackCount++;
         }
-        if (hasAudio) {
+        if (audioConfig != null) {
             mRequiredTrackCount++;
         }
+        mPendings = new SparseArray<>(mRequiredTrackCount);
+        mPtsCounter = new PresentationTimeCounter(videoConfig != null ? videoConfig.framerate : 1,
+                audioConfig != null ? audioConfig.sampleRate : 1);// 作为除数，不能传0
     }
 
     public int addTrack(MediaFormat codecOutputFormat, boolean isVideo) {
@@ -86,13 +88,13 @@ private File file;
             // 所有流都ready了，直接写文件
             if (resetPresentationTime) {
                 // 有些流需要重置presentationTimeUs（如声网的音频流，有时到得比较晚）
-                bufferInfo.presentationTimeUs = newPresentationTime(isVideo);
-            }
-
-            if (isVideo) {
-                mPrevVideoPts = bufferInfo.presentationTimeUs;
+                bufferInfo.presentationTimeUs = newPresentationTime(isVideo, bufferInfo.size);
             } else {
-                mPrevAudioPts = bufferInfo.presentationTimeUs;
+                if (isVideo) {
+                    mPtsCounter.setPrevVideoPts(bufferInfo.presentationTimeUs);
+                } else {
+                    mPtsCounter.setPrevAudioPts(bufferInfo.presentationTimeUs);
+                }
             }
 
             doWriteSampleData(track, byteBuffer, bufferInfo);
@@ -105,13 +107,13 @@ private File file;
             tempBufferInfo.set(bufferInfo.offset, bufferInfo.size,
                     bufferInfo.presentationTimeUs, bufferInfo.flags);
             if (resetPresentationTime) {
-                tempBufferInfo.presentationTimeUs = newPresentationTime(isVideo);
-            }
-
-            if (isVideo) {
-                mPrevVideoPts = tempBufferInfo.presentationTimeUs;
+                tempBufferInfo.presentationTimeUs = newPresentationTime(isVideo, tempBufferInfo.size);
             } else {
-                mPrevAudioPts = tempBufferInfo.presentationTimeUs;
+                if (isVideo) {
+                    mPtsCounter.setPrevVideoPts(bufferInfo.presentationTimeUs);
+                } else {
+                    mPtsCounter.setPrevAudioPts(bufferInfo.presentationTimeUs);
+                }
             }
 
             cache(track, tempByteBuffer, tempBufferInfo);
@@ -123,13 +125,15 @@ private File file;
         MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
         bufferInfo.flags = MediaCodec.BUFFER_FLAG_END_OF_STREAM;
 
-        if (mVideoTrack >= 0) {
-            bufferInfo.presentationTimeUs = mPrevVideoPts + 100L;
-            doWriteSampleData(mVideoTrack, byteBuffer, bufferInfo);
-        }
-        if (mAudioTrack >= 0) {
-            bufferInfo.presentationTimeUs =mPrevAudioPts + 100L;
-            doWriteSampleData(mAudioTrack, byteBuffer, bufferInfo);
+        if (mMuxerStarted) {
+            if (mVideoTrack >= 0) {
+                bufferInfo.presentationTimeUs = mPtsCounter.getPrevVideoPts() + 100L;
+                doWriteSampleData(mVideoTrack, byteBuffer, bufferInfo);
+            }
+            if (mAudioTrack >= 0) {
+                bufferInfo.presentationTimeUs = mPtsCounter.getPrevAudioPts() + 100L;
+                doWriteSampleData(mAudioTrack, byteBuffer, bufferInfo);
+            }
         }
     }
 
@@ -195,33 +199,8 @@ private File file;
         return mPendings.get(track);
     }
 
-    private long newPresentationTime(boolean isVideo) {
-        if (mCommonPtsCounter == null) {
-            mCommonPtsCounter = new PresentationTimeCounter(0);
-        }
-        return isVideo ? mCommonPtsCounter.newVideoPts() : mCommonPtsCounter.newAudioPts();
-
-//        if (isVideo) {
-//            if (mVideoPtsCounter == null) {
-//                mVideoPtsCounter = new PresentationTimeCounter(mPrevAudioPts);
-//            }
-//            return mVideoPtsCounter.newPresentationTimeUs();
-//            return computePresentationTimeNsec();
-//        } else {
-//            if (mAudioPtsCounter == null) {
-//                mAudioPtsCounter = new PresentationTimeCounter(mPrevVideoPts);
-//            }
-//            return mAudioPtsCounter.newPresentationTimeUs();
-//            return mPrevAudioPts + 24000;
-//        }
-    }
-
-    private int frameCount;
-    private long computePresentationTimeNsec() {
-        final long ONE_BILLION = 1000000;//1000000000
-        long pts = frameCount * ONE_BILLION / 15;
-        frameCount++;
-        return pts;
+    private long newPresentationTime(boolean isVideo, int frameSize) {
+        return isVideo ? mPtsCounter.newVideoPts() : mPtsCounter.newAudioPts(frameSize);
     }
 
     public void stop() {
@@ -246,11 +225,12 @@ private File file;
                 mStateCallback = null;
             }
 
-            long minLen = Math.min(mPrevAudioPts, mPrevVideoPts);
+            long minLen = Math.min(mPtsCounter.getPrevAudioPts(), mPtsCounter.getPrevVideoPts());
             long seconds = minLen / 1000 / 1000;
-            float fileSizeMb = ((float) file.length()) / 1024f / 1024f;
+            float fileSizeMb = ((float) mOutputFile.length()) / 1024f / 1024f;
             float twoMinSizeMb = 120f / (float) seconds * fileSizeMb;
-            Log.e(TAG, "muxer stop, duration=" + seconds + "s" +
+            Log.e(TAG, "muxer stop, video=" + (mPtsCounter.getPrevVideoPts()/1000) + "s" +
+                    " audio=" + (mPtsCounter.getPrevAudioPts()/1000) + "s"+
                     " realSize=" + fileSizeMb + "M" +
                     " sizeOf2Min=" + twoMinSizeMb + "M");
         }
