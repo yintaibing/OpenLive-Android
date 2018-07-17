@@ -231,8 +231,9 @@ public class EGLRender {
         long interval = current_time - time;
         if (interval >= video_interval) {
             drawImage();
-//            setPresentationTime(computePresentationTimeNsec(frame_count++));
-            setPresentationTime(0L);
+            // setPresentationTime不能传0，会导致8.0系统只能录到1帧
+            setPresentationTime(computePresentationTimeNsec(frame_count++));
+//            setPresentationTime(0L);
             swapBuffers();
             time = current_time;
         }
